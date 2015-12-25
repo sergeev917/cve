@@ -27,17 +27,12 @@ class DatasetAnnotation:
 
     def __init__(self, path):
         '''Loads annotation from given path.'''
-        raise NotImplementedError('DatasetAnnotation base class is used')
-
+        raise NotImplementedError('Base DatasetAnnotation.__init__ is used')
     def __getitem__(self, sample_name):
-        pass
-
+        raise NotImplementedError('Base DatasetAnnotation.__getitem__ is used')
     def __setitem__(self, sample_name, new_value):
-        pass
-
+        raise NotImplementedError('Base DatasetAnnotation.__setitem__ is used')
     def __delitem__(self, sample_name):
-        pass
-
+        raise NotImplementedError('Base DatasetAnnotation.__delitem__ is used')
     def __iter__(self):
-        # use yield
-        pass
+        raise NotImplementedError('Base DatasetAnnotation.__iter__ is used')

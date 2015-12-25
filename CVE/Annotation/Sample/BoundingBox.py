@@ -1,4 +1,8 @@
-from .Handler import register_handler
+__all__ = (
+    'BoundingBoxSampleAnnotation',
+    'BoundingBoxFieldAdapter',
+)
+
 from operator import itemgetter
 from numpy import (
     ndarray,
@@ -14,6 +18,8 @@ class BoundingBoxSampleAnnotation:
        bounding box. So note that the data is stored row-wise, a bounding box
        is a column in the matrix.'''
     __slots__ = ('bbox',)
+    signature_name = 'numpy_bounding_boxes'
+
     def __init__(self):
         '''Initializes empty annotation, i.e. with no bounding boxes stored.'''
         self.bbox = ndarray((4, 0), dtype = 'int32', order = 'C')
@@ -28,7 +34,6 @@ class BoundingBoxSampleAnnotation:
 class BoundingBoxFieldAdapter:
     field_names = ('bbox_x_min', 'bbox_x_max', 'bbox_y_min', 'bbox_y_max',
                    'bbox_x', 'bbox_y', 'bbox_w', 'bbox_h')
-    access_name = 'numpy_bounding_boxes'
 
     def create_annotation(self):
         return BoundingBoxSampleAnnotation()
@@ -75,7 +80,7 @@ class BoundingBoxFieldAdapter:
             raise Exception() # FIXME
         # constructing a function which will append annotation
         # in the choosen format (from fields string-values)
-        def append_annotation(annotation_object, field_values):
+        def append_annotation(annotation_object, *field_values):
             nonlocal pickup_func, postproc_func
             integer_bboxes = list(map(int, pickup_func(field_values)))
             # NOTE: check performance with the do-nothing lambda

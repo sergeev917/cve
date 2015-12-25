@@ -5,7 +5,7 @@ __all__ = ('SimpleDetectionsList',)
 from os.path import isfile, exists
 from itertools import chain
 from ..Util import parse_format_header
-from .Common import (
+from .DatasetAnnotation import (
     UnrecognizedAnnotationFormat,
     ViolatedAnnotationFormat,
     DatasetAnnotation,
@@ -47,17 +47,12 @@ class SimpleDetectionsList(DatasetAnnotation):
         except KeyError as error:
             msg = '"{}" option is required to be set'.format(error)
             raise ViolatedAnnotationFormat(msg) from None
-        # constructing a class for annotations based on the given parameters
-        # NOTE: this class type is unique per generator invokation
-
         # setting up actual storage for samples
         self._storage = dict()
-        def annotation_init(sample_name):
+        def sample_init(sample_name):
             if sample_name not in self._storage:
                 self._storage[sample_name] = SimpleDetectionsListAnnotation()
             return self._storage[sample_name]
-
-
         def process_line(line):
             fields = map(str.strip, line.split(separator))
         # reading detections, one detections per line

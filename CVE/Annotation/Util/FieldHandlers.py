@@ -1,5 +1,7 @@
 __all__ = ('register_handler', 'get_global_registry')
 
+from copy import deepcopy
+
 registry = dict()
 
 def register_handler(field_name, handler_class):
@@ -9,10 +11,9 @@ def register_handler(field_name, handler_class):
     registry[field_name] = handler_class
 
 def get_global_registry():
-    global registry
-    return registry
+    return deepcopy(registry)
 
 # registering all implemented handlers
-from .BoundingBox import BoundingBoxFieldAdapter
+from ..Sample.BoundingBox import BoundingBoxFieldAdapter
 for field_name in BoundingBoxFieldAdapter.field_names:
     register_handler(field_name, BoundingBoxFieldAdapter)
