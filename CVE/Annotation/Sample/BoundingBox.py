@@ -69,7 +69,7 @@ class BoundingBoxFieldAdapter:
             if len(present_options) == len(required):
                 # preparing a function that will pick required fields
                 indices = map(field_names.index, required)
-                pickup_func = itemgetter(*list(indices))
+                pickup_func = itemgetter(*tuple(indices))
                 def postproc_func(integer_bboxes):
                     integer_bboxes[2] += integer_bboxes[0]
                     integer_bboxes[3] += integer_bboxes[1]

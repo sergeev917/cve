@@ -22,8 +22,8 @@ def generate_sample_annotation_class(adapters):
         def __init__(self):
             for member_name, adapter in zip(names, adapters):
                 setattr(self, member_name, adapter.create_annotation())
-        def broadcast_annotation(self, *args):
-            # broadcasting the received arguments to every atomic annotation
+        def push_all(self, *args):
+            # broadcasting the received arguments to every sub-annotation
             for member_name, adapter in zip(names, adapters):
                 adapter.append_annotation(getattr(self, member_name), *args)
     return MutableSampleAnnotation
