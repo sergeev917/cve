@@ -1,25 +1,36 @@
-__all__ = ()
+__all__ = (
+    'ConfidenceSampleAnnotation',
+    'ConfidenceFieldAdapter',
+)
 
+from operator import itemgetter
 from numpy import (
     ndarray,
     append,
 )
 
 class ConfidenceSampleAnnotation:
-    __slots__ = ('confidence',)
+    __slots__ = ('value',)
     signature_name = 'numpy_confidences'
 
     def __init__(self):
-        self.confidence = ndarray(0, dtype = 'int32', order = 'C')
+        self.value = ndarray(0, dtype = 'int32', order = 'C')
 
-    def push(self, new_confidence_value):
-        self.confidence = append(self.confidence, new_confidence_value)
+    def push(self, confidence_value):
+        self.value = append(self.value, confidence_value)
 
 class ConfidenceFieldAdapter:
-    field_names = ('confidence',)
+    storage_class = ConfidenceSampleAnnotation
+    handled_fields = ('confidence',)
+
     def create_annotation(self):
-        return ConfidenceSampleAnnotation()
+        return self.__class__.storage_class()
 
     def __init__(self, field_names):
-        # FIXME don't forget to insert append_annotation function
-        pass
+        required_field = 'confidence'
+        if required_field not in field_names:
+            raise Exception() # FIXME
+        pickup_func = itemgetter(field_names.index(required_field))
+        def append_annotation(annotation_object, *field_values):
+            annotation_object.push(float(pickup_func(field_values)))
+        self.append_annotation = append_annotation

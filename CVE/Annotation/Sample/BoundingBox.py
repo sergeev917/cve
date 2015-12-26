@@ -17,26 +17,27 @@ class BoundingBoxSampleAnnotation:
        min on one feature channel (for instance, x_min or y_max), not one
        bounding box. So note that the data is stored row-wise, a bounding box
        is a column in the matrix.'''
-    __slots__ = ('bbox',)
+    __slots__ = ('value',)
     signature_name = 'numpy_bounding_boxes'
 
     def __init__(self):
         '''Initializes empty annotation, i.e. with no bounding boxes stored.'''
-        self.bbox = ndarray((4, 0), dtype = 'int32', order = 'C')
+        self.value = ndarray((4, 0), dtype = 'int32', order = 'C')
 
     # NOTE: if the following function is changed then format parsing function
     # in the BoundingBoxFieldAdapter class should be corrected accordingly
     # (whether order of fields or meaning was altered).
     def push(self, x_min, y_min, x_max, y_max):
         new_bbox_column = column_stack(([x_min, y_min, x_max, y_max],))
-        self.bbox = hstack((self.bbox, new_bbox_column))
+        self.value = hstack((self.value, new_bbox_column))
 
 class BoundingBoxFieldAdapter:
-    field_names = ('bbox_x_min', 'bbox_x_max', 'bbox_y_min', 'bbox_y_max',
-                   'bbox_x', 'bbox_y', 'bbox_w', 'bbox_h')
+    storage_class = BoundingBoxSampleAnnotation
+    handled_fields  = ('bbox_x_min', 'bbox_x_max', 'bbox_y_min', 'bbox_y_max',
+                       'bbox_x', 'bbox_y', 'bbox_w', 'bbox_h')
 
     def create_annotation(self):
-        return BoundingBoxSampleAnnotation()
+        return self.__class__.storage_class()
 
     def __init__(self, field_names):
         # selecting options which are related to bounding boxes

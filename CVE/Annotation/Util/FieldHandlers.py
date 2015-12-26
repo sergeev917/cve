@@ -1,4 +1,4 @@
-__all__ = ('register_handler', 'get_global_registry')
+__all__ = ('get_global_registry',)
 
 from copy import deepcopy
 
@@ -10,10 +10,19 @@ def register_handler(field_name, handler_class):
         raise Exception() # FIXME
     registry[field_name] = handler_class
 
+# NOTE: use default value as for "ignore"
 def get_global_registry():
     return deepcopy(registry)
 
 # registering all implemented handlers
 from ..Sample.BoundingBox import BoundingBoxFieldAdapter
-for field_name in BoundingBoxFieldAdapter.field_names:
-    register_handler(field_name, BoundingBoxFieldAdapter)
+from ..Sample.Confidence import ConfidenceFieldAdapter
+from ..Sample.Ignore import IgnoreAdapter
+adapters = (
+    BoundingBoxFieldAdapter,
+    ConfidenceFieldAdapter,
+    IgnoreAdapter,
+)
+for adapter_class in adapters:
+    for field_name in adapter_class.handled_fields:
+        register_handler(field_name, adapter_class)

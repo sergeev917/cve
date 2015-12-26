@@ -1,11 +1,16 @@
 __all__ = ('generate_sample_annotation_class',)
 
+from .Ignore import IgnoreAdapter
+
 # NOTE: maybe it would be great to pass arguments to create_annotation()
+# NOTE: "adapters" is a list of *instances* of some adapter classes
 def generate_sample_annotation_class(adapters):
     # to enforce immutablity as we will use the variable later (closure)
-    adapters = tuple(adapters)
-    values = tuple(map(lambda adp: adp.create_annotation(), adapters))
-    names = tuple(map(lambda val: val.__class__.signature_name, values))
+    adapters = tuple(x for x in adapters if not isinstance(x, IgnoreAdapter))
+    # need to know signature_name's to build __slots__ for the generated class,
+    # to reduce requirements (such we need to get annotation instances:
+    names = tuple(map(lambda a: a.storage_class.signature_name, adapters))
+
     if len(names) != len(set(names)):
         raise Exception('member names clash') #FIXME
     # generating sample annotation which will include all atomic annotations:
@@ -15,8 +20,8 @@ def generate_sample_annotation_class(adapters):
     class MutableSampleAnnotation:
         __slots__ = names
         def __init__(self):
-            for name_value_pair in zip(names, values):
-                setattr(self, *name_value_pair)
+            for member_name, adapter in zip(names, adapters):
+                setattr(self, member_name, adapter.create_annotation())
         def broadcast_annotation(self, *args):
             # broadcasting the received arguments to every atomic annotation
             for member_name, adapter in zip(names, adapters):
