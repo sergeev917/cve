@@ -75,7 +75,8 @@ class SimpleDetectionsList(DatasetAnnotation):
         adapters = tuple(map(lambda cls: cls(fields), adapters))
         # building storage-class which will contain all declared annotations
         # as attributes with predefined names
-        storage_class = generate_sample_annotation_class(adapters)
+        self.StorageClass = generate_sample_annotation_class(adapters)
+        storage_class = self.StorageClass
         # setting up actual storage for samples
         self._storage = dict()
         def access(sample_name):
