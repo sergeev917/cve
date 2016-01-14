@@ -17,6 +17,8 @@ class BBoxIoU:
         self.threshold = threshold
 
     def __call__(self, base_sample, test_sample):
+        # NOTE: output score array is not subjected to low-iou filtering:
+        #       the-best-indices array will indicate it with -1 value
         # converting samples to bounding boxes in numpy format
         base_sample = self.get_bbox(base_sample)
         test_sample = self.get_bbox(test_sample)
