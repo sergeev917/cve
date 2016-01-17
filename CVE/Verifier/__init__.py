@@ -1,1 +1,1 @@
-from .BoundingBox import BBoxIoU
+from .BoundingBox import BoundingBoxVerifier

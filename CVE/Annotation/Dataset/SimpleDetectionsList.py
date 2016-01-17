@@ -53,9 +53,9 @@ class SimpleDetectionsList(DatasetAnnotation):
         except KeyError as error:
             msg = '"{}" option is required to be set'.format(error)
             raise ViolatedAnnotationFormat(msg) from None
-        # checking for "sample-name" field because otherwise we can't identify
-        # any particular sample; also we're replacing "sample-name" with
-        # "ignore" because we're dealing with this field ourselfs
+        # checking for "name" field because otherwise we can't identify
+        # any particular sample; also we're replacing "name" with
+        # "ignore" because we're dealing with this field by ourselfes
         # FIXME: is it possible to use adapter workflow here?
         try:
             sample_name_index = fields.index('name')
@@ -75,8 +75,8 @@ class SimpleDetectionsList(DatasetAnnotation):
         adapters = tuple(map(lambda cls: cls(fields), adapters))
         # building storage-class which will contain all declared annotations
         # as attributes with predefined names
-        self.StorageClass = generate_sample_annotation_class(adapters)
-        storage_class = self.StorageClass
+        self.storage_class = generate_sample_annotation_class(adapters)
+        storage_class = self.storage_class
         # setting up actual storage for samples
         self._storage = dict()
         def access(sample_name):

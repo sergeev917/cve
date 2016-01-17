@@ -7,6 +7,7 @@ from operator import itemgetter
 from numpy import (
     ndarray,
     append,
+    float32,
 )
 
 class ConfidenceSampleAnnotation:
@@ -14,7 +15,7 @@ class ConfidenceSampleAnnotation:
     signature_name = 'numpy_confidences'
 
     def __init__(self):
-        self.value = ndarray(0, dtype = 'int32', order = 'C')
+        self.value = ndarray(0, dtype = 'float32', order = 'C')
 
     def push(self, confidence_value):
         self.value = append(self.value, confidence_value)
@@ -32,5 +33,5 @@ class ConfidenceFieldAdapter:
             raise Exception() # FIXME
         pickup_func = itemgetter(field_names.index(required_field))
         def append_annotation(annotation_object, *field_values):
-            annotation_object.push(float(pickup_func(field_values)))
+            annotation_object.push(float32(pickup_func(field_values)))
         self.append_annotation = append_annotation
