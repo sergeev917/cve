@@ -1,6 +1,7 @@
-__all__ = ('BoundingBoxVerifier',)
+__all__ = ('BoundingBoxIoUVerifier',)
 
 from .BoundingBoxCmp import find_best_iou
+from .Verifier import IVerifier
 from ..Annotation.Capability import (
     bounding_box_capability,
     confidence_capability,
@@ -15,15 +16,16 @@ from numpy import (
     flatnonzero,
 )
 
-class BoundingBoxVerifier:
-    __slots__ = ('get_bbox', 'store_info_prepare', 'threshold', 'interpret')
+# FIXME: use separate annotation-classes and get_conf/get_bbox
+class BoundingBoxIoUVerifier(IVerifier):
+    __slots__ = ('get_bbox', 'store_info_prepare', 'threshold', 'interpret_as')
 
     def __init__(self, AnnotationClass, threshold = None):
         self.get_bbox = bounding_box_capability(AnnotationClass)
         try:
             # if confidence output is available then we will return
             # confidences at which TP/FP are produced.
-            self.interpret = 'confidence-relative'
+            self.interpret_as = 'confidence-relative'
             get_conf = confidence_capability(AnnotationClass)
             def store_info_prepare(test_sample):
                 confids = get_conf(test_sample)
@@ -33,7 +35,7 @@ class BoundingBoxVerifier:
         except: # FIXME
             # if there is no confidence output we will simply return
             # count of FP and TP instead of their confidences.
-            self.interpret = 'unconditional-numbers'
+            self.interpret_as = 'unconditional-numbers'
             def store_info_prepare(test_sample):
                 def store_info(indices):
                     return len(indices)

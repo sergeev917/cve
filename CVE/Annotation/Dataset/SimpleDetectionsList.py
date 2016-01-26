@@ -94,3 +94,11 @@ class SimpleDetectionsList(DatasetAnnotation):
             if sample_name != buffered_sample_annotation[0]:
                 buffered_sample_annotation = (sample_name, access(sample_name))
             buffered_sample_annotation[1].push_all(*field_values)
+
+    def __iter__(self):
+        # items() returns dictionary view, which could be iterated over
+        return self._storage.items().__iter__()
+
+    def __getitem__(self, sample_name):
+        # getting item from underlying dictionary storage
+        return self._storage.__getitem__(sample_name)
