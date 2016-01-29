@@ -32,3 +32,21 @@ def confidence_capability(AnnotationClass):
     if 'numpy_confidences' in slots:
         return lambda markup: markup.numpy_confidences.value
     raise Exception('Confidence capability is missing in the annotation') # FIXME
+
+def blacklist_capability(AnnotationClass):
+    '''Returns a function which indicates whether a sample should be ignored.
+
+    The ignored samples should not be just thrown away. On a training/fitting
+    stage it is correct behavior not to use those samples, but additionally
+    the ignored samples samples should not be consumed by a hard-negatives
+    sampling method. On a testing stage a match with an ignored sample should
+    not be considered as a false-positive and not-matching should not be
+    considered as a false-negative.'''
+    # NOTE: with no actual markup we need to produce an numpy array of booleans
+    #       with correct shape: (samples,). We can't know the samples count
+    #       from here, thus simulation of always-false responses is not
+    #       implemented.
+    slots = get_slots(AnnotationClass)
+    if 'numpy_blacklist' in slots:
+        return lambda markup: markup.numpy_blacklist.value
+    raise Exception('Blacklist capability is missing in the annotation') # FIXME

@@ -8,3 +8,7 @@ from .Confidence import (
     ConfidenceSampleAnnotation,
     ConfidenceFieldAdapter,
 )
+from .Blacklist import (
+    BlacklistSampleAnnotation,
+    BlacklistFieldAdapter,
+)

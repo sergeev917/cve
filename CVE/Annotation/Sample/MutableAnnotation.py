@@ -5,7 +5,7 @@ from .Ignore import IgnoreAdapter
 # NOTE: maybe it would be great to pass arguments to create_annotation()
 # NOTE: "adapters" is a list of *instances* of some adapter classes
 def generate_sample_annotation_class(adapters):
-    # to enforce immutablity as we will use the variable later (closure)
+    # to enforce immutability as we will use the variable later (closure)
     adapters = tuple(x for x in adapters if not isinstance(x, IgnoreAdapter))
     # need to know signature_name's to build __slots__ for the generated class,
     # to reduce requirements (such we need to get annotation instances:

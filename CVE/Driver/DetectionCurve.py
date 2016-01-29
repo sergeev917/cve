@@ -13,6 +13,7 @@ from numpy import (
     nonzero,
     logical_not,
     concatenate,
+    trapz,
 )
 
 class PrecisionHandler:
@@ -79,7 +80,7 @@ available_handlers = {
 }
 
 class DetectionCurveDriver(IEvaluationDriver):
-    __slots__ = ('axis_classes', 'verifier')
+    __slots__ = ('axis_classes', 'verifier', 'enable_auc')
     def __init__(self, **kwargs):
         axis_drv = kwargs.get('mode', ('precision', 'recall'))
         if axis_drv[0] not in available_handlers:
@@ -87,6 +88,7 @@ class DetectionCurveDriver(IEvaluationDriver):
         if axis_drv[1] not in available_handlers:
             raise Exception('unknown notion "{}" is requested for h-axis'.format(axis_drv[1])) # FIXME
         self.axis_classes = tuple(map(available_handlers.__getitem__, axis_drv))
+        self.enable_auc = axis_drv == ('precision', 'recall')
     def reconfigure(self, verifier_instance):
         if verifier_instance.interpret_as != 'confidence-relative':
             raise Exception('only confidence-relative input is supported') # FIXME
@@ -150,7 +152,19 @@ class DetectionCurveDriver(IEvaluationDriver):
             point_idx = idx - 1
             y_points[point_idx] = axis_drv[0].point(interval)
             x_points[point_idx] = axis_drv[1].point(interval)
-        return (x_points, y_points)
+        return {'x-points': x_points, 'y-points': y_points}
 
     def finalize(self, collection_out):
+        y_points = collection_out['y-points']
+        x_points = collection_out['x-points']
+        if self.enable_auc:
+            fair_auc = trapz(y_points, x_points)
+            # since the data could start from an initial recall value (the first
+            # group of the highest-confidence detections), we are missing the
+            # most left area. We will fill the gap between the initial recall
+            # and zero recall with the constant precision which is corresponding
+            # to the its initial value.
+            filled_auc = y_points[0] * x_points[0]
+            collection_out['auc'] = fair_auc + filled_auc
+            collection_out['filled_auc_delta'] = filled_auc
         return collection_out

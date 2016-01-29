@@ -10,7 +10,7 @@ def register_handler(field_name, handler_class):
         raise Exception() # FIXME
     registry[field_name] = handler_class
 
-# NOTE: use default value as for "ignore"
+# NOTE: use default value as for "ignore" as a feature for dataset init
 def get_global_registry():
     return deepcopy(registry)
 
@@ -18,10 +18,12 @@ def get_global_registry():
 from ..Sample.BoundingBox import BoundingBoxFieldAdapter
 from ..Sample.Confidence import ConfidenceFieldAdapter
 from ..Sample.Ignore import IgnoreAdapter
+from ..Sample.Blacklist import BlacklistFieldAdapter
 adapters = (
     BoundingBoxFieldAdapter,
     ConfidenceFieldAdapter,
     IgnoreAdapter,
+    BlacklistFieldAdapter,
 )
 for adapter_class in adapters:
     for field_name in adapter_class.handled_fields:
