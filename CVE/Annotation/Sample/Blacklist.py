@@ -16,8 +16,8 @@ class BlacklistSampleAnnotation:
     signature_name = 'numpy_blacklist'
     def __init__(self):
         self.value = ndarray(0, dtype = 'bool', order = 'C')
-    def push(self, is_blacklisted):
-        self.value = append(self.value, is_blacklisted)
+    def push(self, is_not_blacklisted):
+        self.value = append(self.value, is_not_blacklisted)
 
 class BlacklistFieldAdapter:
     storage_class = BlacklistSampleAnnotation
@@ -35,8 +35,8 @@ class BlacklistFieldAdapter:
         selected_field = targets[0]
         pickup_func = itemgetter(field_names.index(selected_field))
         converter = {
-            'blacklist_01': lambda field: field == '1',
-            'blacklist_tf': lambda field: field == 'T',
+            'blacklist_01': lambda field: field == '0',
+            'blacklist_tf': lambda field: field.upper() == 'F',
         }[selected_field]
         def append_annotation(annotation_object, *field_values):
             annotation_object.push(converter(pickup_func(field_values)))

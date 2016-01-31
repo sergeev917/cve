@@ -29,6 +29,10 @@ def evaluate(*args, **kwargs):
             self.workspace['cfg:verifier'] = verifier
         def setup_driver(self, driver):
             self.workspace['cfg:driver'] = driver
+        def do_verifier_config(self):
+            gt_dataset = self.workspace['cfg:gt-dataset']
+            eval_dataset = self.workspace['cfg:eval-dataset']
+            self.workspace['cfg:verifier'].reconfigure(gt_dataset, eval_dataset)
         def do_driver_config(self):
             verifier = self.workspace['cfg:verifier']
             self.workspace['cfg:driver'].reconfigure(verifier)
@@ -99,6 +103,7 @@ def evaluate(*args, **kwargs):
         'evaluation driver is missing',
         'multiple evaluation drivers are not supported',
     )
+    ev.queue.append((ev.do_verifier_config, [], {}))
     ev.queue.append((ev.do_driver_config, [], {}))
     # at this point all configuration is done, inserting the actual work
     ev.queue.append((ev.do_verifier_pass, [], {}))

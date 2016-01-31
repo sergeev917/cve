@@ -2,7 +2,7 @@
 '''Annotation.SimpleDetectionsList: class for simple detections list format'''
 __all__ = ('SimpleDetectionsList',)
 
-from os.path import isfile, exists
+from os.path import isfile, exists, basename, splitext
 from itertools import chain
 from operator import itemgetter
 from ..Sample import generate_sample_annotation_class
@@ -20,7 +20,7 @@ class SimpleDetectionsList(DatasetAnnotation):
     signature_name = 'simple detections list'
 
     def __init__(self, path, **kwargs):
-        # adapter_store in kwargs
+        # FIXME: +docstring adapter_store in kwargs
         if not exists(path):
             raise ValueError('The given path "{}" does not exist'.format(path))
         if not isfile(path):
@@ -53,17 +53,30 @@ class SimpleDetectionsList(DatasetAnnotation):
         except KeyError as error:
             msg = '"{}" option is required to be set'.format(error)
             raise ViolatedAnnotationFormat(msg) from None
-        # checking for "name" field because otherwise we can't identify
+        # checking for sample-name fields because otherwise we can't identify
         # any particular sample; also we're replacing "name" with
-        # "ignore" because we're dealing with this field by ourselfes
-        # FIXME: is it possible to use adapter workflow here?
-        try:
-            sample_name_index = fields.index('name')
-            fields[sample_name_index] = 'ignore'
-            get_sample_name = itemgetter(sample_name_index)
-        except ValueError as error:
-            msg = '"name" field must be set to distinguish samples'
-            raise ViolatedAnnotationFormat(msg) from None
+        # "ignore" because we're dealing with name-field by ourselves
+        sample_name_fields = ('name', 'path')
+        present = tuple(filter(lambda f: f in sample_name_fields, fields))
+        if len(present) == 0:
+            raise ViolatedAnnotationFormat(
+                '"name" or "path" must be set to distinguish samples'
+            )
+        if len(present) > 1:
+            raise ViolatedAnnotationFormat(
+                'only one sample name-related field must be specified'
+            )
+        selected_name_type = present[0]
+        sample_name_index = fields.index(selected_name_type)
+        fields[sample_name_index] = 'ignore'
+        get_name_field = itemgetter(sample_name_index)
+        if selected_name_type == 'name':
+            # a sample name is actually just value of the selected field
+            get_sample_name = get_name_field
+        elif selected_name_type == 'path':
+            # a sample name is a path, need to extract the file name
+            def get_sample_name(fields):
+                return splitext(basename(get_name_field(fields)))[0]
         # getting a storage to get adapter classes from (using field names)
         adapter_store = kwargs.get('adapter_store', get_global_registry())
         try:
@@ -101,4 +114,9 @@ class SimpleDetectionsList(DatasetAnnotation):
 
     def __getitem__(self, sample_name):
         # getting item from underlying dictionary storage
-        return self._storage.__getitem__(sample_name)
+        # NOTE: this format doesn't keep records of samples with no detections,
+        #       so any unseen sample name will produce empty annotation here
+        annotation = self._storage.get(sample_name, None)
+        if annotation == None:
+            return self.storage_class()
+        return annotation
