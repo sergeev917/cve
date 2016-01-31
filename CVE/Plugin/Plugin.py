@@ -1,9 +1,9 @@
 __all__ = ('IPlugin',)
 
 class IPlugin:
-    '''A class for actual plugins to be inhereted from'''
-    def __init__(self):
-        pass
-
+    '''A class for an actual plugin to be inherited from'''
     def inject(self, evaluator):
-        pass
+        derived_classname = self.__class__.__qualname__
+        raise NotImplementedError(
+            'missing inject() implementation in {}'.format(derived_classname)
+        )
