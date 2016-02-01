@@ -16,8 +16,17 @@ from numpy import (
     trapz,
 )
 
+# NOTE: percent conversion (multiply by 100) is not applied in precision and
+#       recall handlers because we're calculating AUC (AP) using its values
+
+# NOTE: entity name is here to help additional plugins like graph plotter to
+#       represent the given information: like axis names, percentage/log-scale
+#       conversions and so on. Those parameters are required for usability, but
+#       are not ours to set: for example, plotter could use a different locale.
+
 class PrecisionHandler:
     __slots__ = ('curr_detections', 'curr_true_positives')
+    entity = 'precision'
     def __init__(self, verifier, verifier_out_lst):
         self.curr_detections = 0
         self.curr_true_positives = 0
@@ -31,6 +40,7 @@ class PrecisionHandler:
 
 class RecallHandler:
     __slots__ = ('inv_gt_size', 'curr_true_positives')
+    entity = 'recall'
     def __init__(self, verifier, verifier_out_lst):
         # calculating gt objects count (since it is constant)
         full_gt_count = 0
@@ -50,6 +60,7 @@ class RecallHandler:
 
 class FPCountHandler:
     __slots__ = ('curr_false_positives')
+    entity = 'false-positives'
     def __init__(self, verifier, verifier_out_lst):
         self.curr_false_positives = 0
     def point(self, interval):
@@ -59,6 +70,7 @@ class FPCountHandler:
 
 class FPPIHandler:
     __slots__ = ('curr_false_positives', 'inv_samples_count')
+    entity = 'false-positives-per-sample'
     def __init__(self, verifier, verifier_out_lst):
         # calculating gt samples count (since it is constant)
         # NOTE: it is different (rather than gt objects) because one sample
@@ -152,7 +164,12 @@ class DetectionCurveDriver(IEvaluationDriver):
             point_idx = idx - 1
             y_points[point_idx] = axis_drv[0].point(interval)
             x_points[point_idx] = axis_drv[1].point(interval)
-        return {'x-points': x_points, 'y-points': y_points}
+        return {
+            'x-points': x_points,
+            'y-points': y_points,
+            'x-entity': self.axis_classes[1].entity,
+            'y-entity': self.axis_classes[0].entity,
+        }
 
     def finalize(self, collection_out):
         y_points = collection_out['y-points']
