@@ -1,6 +1,5 @@
 __all__ = (
-    'IEvaluationDriver',
+    'DetectionCurveDriver',
 )
 
-from .Driver import IEvaluationDriver
 from .DetectionCurve import DetectionCurveDriver

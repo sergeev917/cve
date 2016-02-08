@@ -10,13 +10,13 @@ from ..Util import (
     parse_format_header,
     get_global_registry,
 )
-from .DatasetAnnotation import (
+from ...Base import (
     UnrecognizedAnnotationFormat,
     ViolatedAnnotationFormat,
-    DatasetAnnotation,
+    IDatasetAnnotation,
 )
 
-class SimpleDetectionsList(DatasetAnnotation):
+class SimpleDetectionsList(IDatasetAnnotation):
     signature_name = 'simple detections list'
 
     def __init__(self, path, **kwargs):

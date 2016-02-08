@@ -1,11 +1,25 @@
+# NOTE: functions other that evaluate() are exported to ease up a plugin writing
+__all__ = (
+    'setup_gt_dataset',
+    'setup_eval_dataset',
+    'setup_verifier',
+    'setup_driver',
+    'do_verifier_config',
+    'do_driver_config',
+    'do_verifier_pass',
+    'do_driver_collect',
+    'evaluate',
+)
+
 from .Role import (
     GroundTruthDataset,
     EvaluatedDataset,
 )
-from .Verifier import IVerifier
-from .Driver import IEvaluationDriver
-from .Plugin import IPlugin
-
+from .Base import (
+    IVerifier,
+    IEvaluationDriver,
+    IPlugin,
+)
 
 def evaluate(*args, **kwargs):
     '''Evaluates the given test dateset against the ground truth one'''
@@ -20,6 +34,8 @@ def evaluate(*args, **kwargs):
             func, args, kwargs = self.queue.pop(0)
             func(self.workspace, *args, **kwargs)
         def execute(self):
+            from pprint import pprint
+            pprint(self.queue)
             while len(self.queue) > 0:
                 self.do_step()
     # populating Evaluator instance and setting up default queue
@@ -62,45 +78,46 @@ def evaluate(*args, **kwargs):
     # at this point all configuration is done, inserting the actual work
     ev.queue.append((do_verifier_pass, [], {}))
     ev.queue.append((do_driver_collect, [], {}))
-    ev.queue.append((remove_verifier_storage, [], {}))
-    ev.queue.append((do_driver_finalize, [], {}))
-    ev.queue.append((remove_driver_collect_storage, [], {}))
     # the last thing remains -- patching plugins in:
     # a plugin do observe the entire jobs queue and is free to modify it
     plugins = (x for x in args if isinstance(x, IPlugin))
     for plugin in plugins:
         plugin.inject(ev)
-    # doing all the work and returning the driver output
+    # now doing all the planned work
     ev.execute()
-    return ev.workspace['out:driver'] # FIXME
+    # cleaning the workspace up
+    for key in list(ev.workspace.keys()):
+        if not key.startswith('export:'):
+            del ev.workspace[key]
+    return ev.workspace
 
 # standard jobs to be inserted into task-queue are defined here:
 # additional functionality could be inserted via plugins
 def setup_gt_dataset(workspace, role_dataset):
-    workspace['cfg:gt-dataset'] = role_dataset.dataset
+    workspace['env:dataset:gt'] = role_dataset.dataset
 
 def setup_eval_dataset(workspace, role_dataset):
-    workspace['cfg:eval-dataset'] = role_dataset.dataset
+    workspace['env:dataset:eval'] = role_dataset.dataset
 
 def setup_verifier(workspace, verifier):
-    workspace['cfg:verifier'] = verifier
+    workspace['env:verifier'] = verifier
 
 def setup_driver(workspace, driver):
-    workspace['cfg:driver'] = driver
+    workspace['env:driver'] = driver
 
 def do_verifier_config(workspace):
-    gt_dataset = workspace['cfg:gt-dataset']
-    eval_dataset = workspace['cfg:eval-dataset']
-    workspace['cfg:verifier'].reconfigure(gt_dataset, eval_dataset)
+    gt_dataset = workspace['env:dataset:gt']
+    eval_dataset = workspace['env:dataset:eval']
+    workspace['env:verifier'].reconfigure(gt_dataset, eval_dataset)
 
 def do_driver_config(workspace):
-    verifier = workspace['cfg:verifier']
-    workspace['cfg:driver'].reconfigure(verifier)
+    verifier = workspace['env:verifier']
+    workspace['env:driver'].reconfigure(verifier)
 
 def do_verifier_pass(workspace):
-    gt_dataset = workspace['cfg:gt-dataset']
-    ev_dataset = workspace['cfg:eval-dataset']
-    verify = workspace['cfg:verifier']
+    gt_dataset = workspace['env:dataset:gt']
+    ev_dataset = workspace['env:dataset:eval']
+    verify = workspace['env:verifier']
     # temporary storage for verifier responses
     storage = []
     # iterating over ground-truth dataset as it has to declare
@@ -111,26 +128,12 @@ def do_verifier_pass(workspace):
         if ev_annotation == None:
             ev_annotation = ev_dataset.storage_class()
         storage.append(verify(gt_annotation, ev_annotation))
-    workspace['out:verifier'] = storage
-
-def remove_verifier_storage(workspace):
-    del workspace['out:verifier']
+    workspace['tmp:verifier:pass'] = storage
 
 def do_driver_collect(workspace):
-    # NOTE: we could save state after `collect` in the driver instance
-    #       itself but we want to keep driver instance reentrant
     # NOTE: `collect` is using the entire output of verifier (and not
     #       per-element) because we need to know (for example) how much
     #       memory to preallocate inside `collect`
-    storage = workspace['out:verifier']
-    collect = workspace['cfg:driver'].collect
-    workspace['out:driver-collect'] = collect(storage)
-
-def remove_driver_collect_storage(workspace):
-    del workspace['out:driver-collect']
-
-def do_driver_finalize(workspace):
-    finalize = workspace['cfg:driver'].finalize
-    collected = workspace['out:driver-collect']
-    workspace['out:driver'] = finalize(collected)
-
+    storage = workspace['tmp:verifier:pass']
+    collect = workspace['env:driver'].collect
+    workspace['export:driver'] = collect(storage)

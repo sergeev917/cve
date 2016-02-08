@@ -1,7 +1,7 @@
 # coding: utf8
 __all__ = ('Plotter2D',)
 
-from .Plugin import IPlugin
+from ..Base import IPlugin
 from matplotlib import use
 from matplotlib.pyplot import figure, axes
 from matplotlib.font_manager import FontProperties
@@ -30,7 +30,7 @@ class Plotter2D(IPlugin):
 def do_plot(workspace, **options):
     font_obj = options['font']
     save_path = options['save_path']
-    driver_data = workspace['out:driver']
+    driver_data = workspace['export:driver']
     graph_label = options.get('label', None)
     if graph_label != None:
         auc = driver_data.get('auc', None)

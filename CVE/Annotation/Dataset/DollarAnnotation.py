@@ -11,13 +11,13 @@ from ..Util import (
     parse_format_header,
     get_global_registry,
 )
-from .DatasetAnnotation import (
+from ...Base import (
     UnrecognizedAnnotationFormat,
     ViolatedAnnotationFormat,
-    DatasetAnnotation,
+    IDatasetAnnotation,
 )
 
-class DollarAnnotation(DatasetAnnotation):
+class DollarAnnotation(IDatasetAnnotation):
     def __init__(self, path, **kwargs):
         # setting up an actual storage for samples
         self._storage = dict()

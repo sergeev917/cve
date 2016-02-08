@@ -1,7 +1,7 @@
 __all__ = ('BoundingBoxIoUVerifier',)
 
 from .BoundingBoxCmp import find_best_iou
-from .Verifier import IVerifier
+from ..Base import IVerifier
 from ..Annotation.Capability import (
     bounding_box_capability,
     confidence_capability,

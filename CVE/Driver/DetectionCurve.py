@@ -2,7 +2,7 @@ __all__ = (
     'DetectionCurveDriver',
 )
 
-from .Driver import IEvaluationDriver
+from ..Base import IEvaluationDriver
 from numpy import (
     empty,
     argsort,

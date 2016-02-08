@@ -1,4 +1,7 @@
-__all__ = ('IPlugin',)
+__all__ = (
+    'Plotter2D',
+    'TuneBBoxesAnnotations',
+)
 
-from .Plugin import IPlugin
 from .Plotter import Plotter2D
+from .FitBBoxes import TuneBBoxesAnnotations
