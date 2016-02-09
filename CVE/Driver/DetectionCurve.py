@@ -164,16 +164,12 @@ class DetectionCurveDriver(IEvaluationDriver):
             point_idx = idx - 1
             y_points[point_idx] = axis_drv[0].point(interval)
             x_points[point_idx] = axis_drv[1].point(interval)
-        return {
+        results = {
             'x-points': x_points,
             'y-points': y_points,
             'x-entity': self.axis_classes[1].entity,
             'y-entity': self.axis_classes[0].entity,
         }
-
-    def finalize(self, collection_out):
-        y_points = collection_out['y-points']
-        x_points = collection_out['x-points']
         if self.enable_auc:
             fair_auc = trapz(y_points, x_points)
             # since the data could start from an initial recall value (the first
@@ -182,6 +178,6 @@ class DetectionCurveDriver(IEvaluationDriver):
             # and zero recall with the constant precision which is corresponding
             # to the its initial value.
             filled_auc = y_points[0] * x_points[0]
-            collection_out['auc'] = fair_auc + filled_auc
-            collection_out['filled_auc_delta'] = filled_auc
-        return collection_out
+            results['auc'] = fair_auc + filled_auc
+            results['filled_auc_delta'] = filled_auc
+        return results

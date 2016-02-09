@@ -34,8 +34,6 @@ def evaluate(*args, **kwargs):
             func, args, kwargs = self.queue.pop(0)
             func(self.workspace, *args, **kwargs)
         def execute(self):
-            from pprint import pprint
-            pprint(self.queue)
             while len(self.queue) > 0:
                 self.do_step()
     # populating Evaluator instance and setting up default queue

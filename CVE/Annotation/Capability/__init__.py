@@ -4,9 +4,16 @@ __all__ = (
 )
 
 def get_slots(AnnotationClass):
-    if not hasattr(AnnotationClass, '__slots__'):
-        raise Exception('Annotation classes without slots are not supported') # FIXME
-    return AnnotationClass.__slots__
+    # proxy-classes should be processed separately
+    try:
+        return AnnotationClass._proxied_slots
+    except AttributeError:
+        pass
+    # with no proxy only slotted classes are supported
+    try:
+        return AnnotationClass.__slots__
+    except AttributeError:
+        raise Exception('Annotation classes without slots are not supported') from None# FIXME
 
 def bounding_box_capability(AnnotationClass):
     '''Returns a function which produces bounding box in a predefined format.
@@ -14,7 +21,16 @@ def bounding_box_capability(AnnotationClass):
     This function provides a unified way to obtain bounding box in a predefined
     format from various sources. For example we may need to work with bounding
     boxes but the annotation we have contains only ellipses, so we need an
-    adapter to perform conversion.'''
+    adapter to perform conversion.
+
+    NOTE: be aware that an instance could have own method while its class could
+    have the function or not. Don't forget about storage_class member for
+    annotations and that it is checked for capability-related logic. Also note
+    that instance-related implementation will be invoked, so an instance could
+    override logic behind the function.'''
+    # checking for an explicit capability implementation
+    if hasattr(AnnotationClass, 'bounding_box_capability'):
+        return lambda markup: markup.bounding_box_capability()
     slots = get_slots(AnnotationClass)
     # checking in the order of preference:
     # if we have a bbox markup itself we should not convert anything to bbox
