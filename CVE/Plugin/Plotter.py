@@ -2,6 +2,7 @@
 __all__ = ('Plotter2D',)
 
 from ..Base import IPlugin
+from ..Logger import get_default_logger
 from matplotlib import use
 from matplotlib.pyplot import figure, axes
 from matplotlib.font_manager import FontProperties
@@ -23,11 +24,16 @@ class Plotter2D(IPlugin):
             font = FontProperties(family = fontname, size = fontsize)
             self.config['font'] = font
         self.config['save_path'] = save_path
-    def inject(self, evaluator):
+    def inject(self, evaluator, **kwargs):
+        config = dict(self.config)
+        logger = kwargs.get('logger', get_default_logger())
+        if 'logger' not in config:
+            config['logger'] = logger
         # injecting `do_plot` as the last step in job queue
-        evaluator.queue.append((do_plot, [], self.config))
+        evaluator.queue.append((do_plot, [], config))
 
 def do_plot(workspace, **options):
+    logger = options['logger'] # unconditionally set by the injector
     font_obj = options['font']
     save_path = options['save_path']
     driver_data = workspace['export:driver']

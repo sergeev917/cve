@@ -84,7 +84,7 @@ class BoundingBoxFieldAdapter:
         def append_annotation(annotation_object, *field_values):
             nonlocal pickup_func, postproc_func
             integer_bboxes = list(map(int, pickup_func(field_values)))
-            # NOTE: check performance with the do-nothing lambda
+            # FIXME: check performance with the do-nothing lambda
             if postproc_func != None:
                 postproc_func(integer_bboxes)
             annotation_object.push(*integer_bboxes)

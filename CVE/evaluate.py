@@ -20,12 +20,15 @@ from .Base import (
     IEvaluationDriver,
     IPlugin,
 )
+from .Logger import get_default_logger
 
 def evaluate(*args, **kwargs):
     '''Evaluates the given test dateset against the ground truth one'''
+    logger = kwargs.pop('logger', get_default_logger())
     # workflow state class which will do all the work after being configured
     class Evaluator:
         def __init__(self):
+            self.logger = logger
             # a queue of actions to be performed: (func, args, kwargs)
             self.queue = []
             # a dictionary where all information is stored
@@ -80,7 +83,10 @@ def evaluate(*args, **kwargs):
     # a plugin do observe the entire jobs queue and is free to modify it
     plugins = (x for x in args if isinstance(x, IPlugin))
     for plugin in plugins:
-        plugin.inject(ev)
+        plugin_name = plugin.__class__.__qualname__
+        subtask_name = 'injecting {} plugin into the queue'.format(plugin_name)
+        with logger.subtask(subtask_name) as subtask:
+            plugin.inject(ev, logger = subtask)
     # now doing all the planned work
     ev.execute()
     # cleaning the workspace up

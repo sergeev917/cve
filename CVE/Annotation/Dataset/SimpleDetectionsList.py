@@ -6,9 +6,11 @@ from os.path import isfile, exists, basename, splitext
 from itertools import chain
 from operator import itemgetter
 from ..Sample import generate_sample_annotation_class
+from ...Logger import get_default_logger
 from ..Util import (
     parse_format_header,
     get_global_registry,
+    count_lines,
 )
 from ...Base import (
     UnrecognizedAnnotationFormat,
@@ -18,13 +20,26 @@ from ...Base import (
 
 class SimpleDetectionsList(IDatasetAnnotation):
     signature_name = 'simple detections list'
-
     def __init__(self, path, **kwargs):
         # FIXME: +docstring adapter_store in kwargs
+        progress = kwargs.get('progress', True)
+        if progress:
+            logger = kwargs.get('logger', get_default_logger())
+            # disable progress-bar overhead if the current logger is a devnull
+            if logger.__dummy__:
+                progress = False
         if not exists(path):
             raise ValueError('The given path "{}" does not exist'.format(path))
         if not isfile(path):
             raise UnrecognizedAnnotationFormat('A regular file is expected')
+        # if the progress bar is requested we need to count lines in the markup
+        if progress:
+            msg = 'reading ground-truth files in "{}"'.format(path)
+            with logger.progress(msg, count_lines(path)) as spinner:
+                self.__load__(path, spinner.tick, **kwargs)
+        else:
+            self.__load__(path, **kwargs)
+    def __load__(self, path, tick = None, **kwargs):
         markup_file = open(path, 'r')
         # now reading the first line where a signature should be located
         signature_line = markup_file.readline().strip()
@@ -37,6 +52,7 @@ class SimpleDetectionsList(IDatasetAnnotation):
         # now checking for header continuation with format-specific options
         format_header_lines = []
         pending_line = []
+        tick() if tick else None # tick for `signature_line` reading
         for buffered_line in markup_file:
             if not buffered_line.startswith('#'):
                 # we've already read it, but it is not from header
@@ -44,6 +60,7 @@ class SimpleDetectionsList(IDatasetAnnotation):
                 break
             # stripping comment and newline symbols
             format_header_lines.append(buffered_line[1:].strip())
+            tick() if tick else None # tick for the appended line
         # don't forget that there is a line in buffer (pending_line)
         options = parse_format_header(' '.join(format_header_lines))
         # loading the required configuration options
@@ -107,11 +124,10 @@ class SimpleDetectionsList(IDatasetAnnotation):
             if sample_name != buffered_sample_annotation[0]:
                 buffered_sample_annotation = (sample_name, access(sample_name))
             buffered_sample_annotation[1].push_all(*field_values)
-
+            tick() if tick else None # tick for the current line
     def __iter__(self):
         # items() returns dictionary view, which could be iterated over
         return self._storage.items().__iter__()
-
     def __getitem__(self, sample_name):
         # getting item from underlying dictionary storage
         # NOTE: this format doesn't keep records of samples with no detections,

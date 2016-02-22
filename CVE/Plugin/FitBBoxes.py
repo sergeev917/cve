@@ -28,6 +28,7 @@ from ..evaluate import (
 from ..Annotation.Capability import bounding_box_capability
 from ..Annotation.Sample import BoundingBoxSampleAnnotation
 from ..Verifier.BoundingBoxCmp import find_best_iou
+from ..Logger import get_default_logger
 
 class TuneBBoxesAnnotations(IPlugin):
     '''Applies global scale and translate transform to annotations
@@ -39,10 +40,11 @@ class TuneBBoxesAnnotations(IPlugin):
     def __init__(self, **opts):
         self.rounds = opts.pop('rounds', 5)
         self.opts = opts
-    def inject(self, ev):
+    def inject(self, ev, **kwargs):
         if self.rounds == 0:
             return
         queue = ev.queue
+        logger = kwargs.get('logger', get_default_logger())
         # checking for suitable queue: need to find gt/eval datasets
         qfunc = tuple(map(itemgetter(0), queue))
         gt  = [i for i, v in enumerate(qfunc) if v is setup_gt_dataset]
@@ -76,8 +78,6 @@ def adjust_transformation(workspace):
     params = workspace.pop('export:driver')
     g = workspace['env:dataset:eval']._transformer
     g.x_shift, g.y_shift, g.x_scale, g.y_scale = params
-
-from numpy import isfinite
 
 class TuneBBoxesDriver(IEvaluationDriver):
     def __init__(self, **kwargs):
@@ -171,7 +171,7 @@ class TuneProxyDataset(IDatasetAnnotation):
         get_bbox = bounding_box_capability(origin_storage_class)
         transformer_closure = Transformer()
         class TuneProxySample:
-            _proxied_slots = origin_storage_class.__slots__
+            __proxied_slots__ = origin_storage_class.__slots__
             __slots__ = ('_origin',)
             def __init__(self, origin_sample):
                 self._origin = origin_sample

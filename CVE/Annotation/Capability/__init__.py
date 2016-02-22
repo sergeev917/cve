@@ -6,7 +6,7 @@ __all__ = (
 def get_slots(AnnotationClass):
     # proxy-classes should be processed separately
     try:
-        return AnnotationClass._proxied_slots
+        return AnnotationClass.__proxied_slots__
     except AttributeError:
         pass
     # with no proxy only slotted classes are supported

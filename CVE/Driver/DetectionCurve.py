@@ -17,11 +17,11 @@ from numpy import (
 )
 
 # NOTE: percent conversion (multiply by 100) is not applied in precision and
-#       recall handlers because we're calculating AUC (AP) using its values
+#       recall handlers because we're calculating AUC (AP) using those values
 
 # NOTE: entity name is here to help additional plugins like graph plotter to
 #       represent the given information: like axis names, percentage/log-scale
-#       conversions and so on. Those parameters are required for usability, but
+#       conversions and so on. Those options are required for usability, but
 #       are not ours to set: for example, plotter could use a different locale.
 
 class PrecisionHandler:

@@ -16,15 +16,33 @@ from ...Base import (
     ViolatedAnnotationFormat,
     IDatasetAnnotation,
 )
+from ...Logger import get_default_logger
 
+# FIXME: suppress output until we're sure that we're dealing with a dollar base
 class DollarAnnotation(IDatasetAnnotation):
     def __init__(self, path, **kwargs):
-        # setting up an actual storage for samples
-        self._storage = dict()
+        progress = kwargs.get('progress', True)
+        if progress:
+            logger = kwargs.get('logger', get_default_logger())
+            # disable progress-bar overhead if the current logger is a devnull
+            if logger.__dummy__:
+                progress = False
         if not exists(path):
             raise ValueError('The given path "{}" does not exist'.format(path))
         if not isdir(path):
             raise UnrecognizedAnnotationFormat('A directory is expected')
+        if not progress:
+            self.__load__(path, **kwargs)
+        else:
+            # user has requested a progress bar, so we need to count files
+            file_count = 0
+            for elem in scandir(path):
+                if not elem.name.startswith('.') and not elem.is_dir():
+                    file_count += 1
+            msg = 'reading ground-truth files in "{}"'.format(path)
+            with logger.progress(msg, file_count) as spinner:
+                self.__load__(path, spinner.tick, **kwargs)
+    def __load__(self, path, tick = None, **kwargs):
         directories_found = False
         # the version of Dollar format to use (differ in the number of fields)
         used_version = '0'
@@ -32,6 +50,8 @@ class DollarAnnotation(IDatasetAnnotation):
         # the format version is fixed and must match any later specifications
         freeze_version = False
         format_version_line = '% bbGt version='
+        # setting up an actual storage for samples
+        self._storage = dict()
         for elem in scandir(path):
             if elem.name.startswith('.'):
                 continue
@@ -102,6 +122,8 @@ class DollarAnnotation(IDatasetAnnotation):
             # assigning name of the sample to be put into the storage
             sample_name = splitext(elem.name)[0]
             self._storage[sample_name] = markup_obj
+            # notifying the progress bar to tick forward (if any)
+            tick() if tick else None
     def __iter__(self):
         # items() returns dictionary view, which could be iterated over
         return self._storage.items().__iter__()
