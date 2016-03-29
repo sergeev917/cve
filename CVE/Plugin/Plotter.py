@@ -25,15 +25,10 @@ class Plotter2D(IPlugin):
             self.config['font'] = font
         self.config['save_path'] = save_path
     def inject(self, evaluator, **kwargs):
-        config = dict(self.config)
-        logger = kwargs.get('logger', get_default_logger())
-        if 'logger' not in config:
-            config['logger'] = logger
         # injecting `do_plot` as the last step in job queue
-        evaluator.queue.append((do_plot, [], config))
+        evaluator.queue.append((do_plot, [], self.config))
 
-def do_plot(workspace, **options):
-    logger = options['logger'] # unconditionally set by the injector
+def do_plot(workspace, logger, **options):
     font_obj = options['font']
     save_path = options['save_path']
     driver_data = workspace['export:driver']

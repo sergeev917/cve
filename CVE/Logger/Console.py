@@ -96,15 +96,16 @@ class LineManager:
 class SingleSubtask:
     reserve_width = 9
     def __init__(self, parent, descline, **kwargs):
-        self.line = parent._line
+        self._line = parent._line
         self.descline = descline
         self.use_timer = kwargs.get('timer', True)
     def __enter__(self):
-        self.line.push('@ ')
-        space = self.line.use_width - self.__class__.reserve_width
+        self._line.push('@ ')
+        space = self._line.use_width - self.__class__.reserve_width
         line = shorten(self.descline, width = space, placeholder = '...')
         line += wrap_color(2, '.' * (space - len(line)))
-        self.line.append(line, space)
+        self._line.append(line, space)
+        self._need_status_label = True
         if self.use_timer:
             self._enter_time = time()
         return self
@@ -113,43 +114,57 @@ class SingleSubtask:
             timer_msg = '(' + format_time_delta(time() - self._enter_time) + ')'
             colored_timer = wrap_color(5, timer_msg), len(timer_msg)
         if exc_type == None:
-            self.line.append(wrap_color(4, 'COMPLETED'), 9, newline = True)
-            self.line.pop()
-            self.line.append(*colored_timer, newline = True, flushright = True)
+            if self._need_status_label:
+                self._line.append(wrap_color(4, 'COMPLETED'), 9, newline = True)
+            self._line.pop()
+            self._line.append(*colored_timer, newline = True, flushright = True)
             return
-        self.line.append(wrap_color(3, 'SHATTERED'), 9, newline = True)
+        if self._need_status_label:
+            self._line.append(wrap_color(3, 'SHATTERED'), 9, newline = True)
         # calculating current offset
-        self.line.push(wrap_color(3, '[ERROR] '), 8)
+        self._line.push(wrap_color(3, '[ERROR] '), 8)
         msg = 'Traceback:\n' + '\n'.join(format_tb(traceback))
         msg += '\n{}: {}'.format(exc_type.__name__, exc_value)
-        wrap_line = lambda l: wrap(l, width = self.line.def_width)
+        wrap_line = lambda l: wrap(l, width = self._line.def_width)
         for lines in map(wrap_line, msg.split('\n')):
             for line in lines:
-                self.line.append(line, newline = True)
-        self.line.newline()
-        self.line.pop()
-        raise Exception('Subtask has failed') from None
+                self._line.append(line, newline = True)
+        self._line.pop()
+        #raise Exception('Subtask has failed') from None
+        raise SystemExit(1)
+    def subtask(self, descline, **kwargs):
+        # now we're displaying dotted line with pending COMPLETED/SHATTERED:
+        # since now there is a subtask requested, we need to indicate that
+        self._need_status_label = False
+        self._line.append(wrap_color(4, 'SUBTASKED'), 9, newline = True)
+        return SingleSubtask(self, descline, **kwargs)
+    def progress(self, descline, ticks):
+        self._need_status_label = False
+        self._line.append(wrap_color(4, 'SUBTASKED'), 9, newline = True)
+        return SpinnerSubtask(self, descline, ticks)
 
 class SpinnerSubtask:
     def __init__(self, parent, descline, ticks = 100):
-        self.line = parent._line
+        self._line = parent._line
         self.descline = descline
         self._fullticks = ticks
-        self._fill = ('|', '\u00b7')
+        self._fill = ('|', '|')#'\u00b7')
     def __enter__(self):
-        self.line.push('@ ')
+        self._line.push('@ ')
         self._enter_time = time()
         self._currticks = 0
         self._filled_dots = 0
-        space = self.line.use_width
+        space = self._line.use_width - 8
         line = shorten(self.descline, width = space, placeholder = '...')
-        self.line.append(line, newline = True)
-        self._bar_size = self.line.use_width - 7
+        line += wrap_color(2, '.' * (space - len(line)))
+        line += wrap_color(4, 'PROGRESS')
+        self._line.append(line, self._line.use_width, newline = True)
+        self._bar_size = self._line.use_width - 7
         return self
     def tick(self, count = 1):
         self._currticks += count
-        self.__bar()
-    def __bar(self):
+        self.__bar__()
+    def __bar__(self):
         dots = trunc(self._bar_size * self._currticks / self._fullticks)
         dots = min(dots, self._bar_size)
         if self._filled_dots != dots:
@@ -158,25 +173,25 @@ class SpinnerSubtask:
             bar = wrap_color(4, self._fill[0] * dots)
             bar += wrap_color(2, self._fill[1] * (self._bar_size - dots))
             bar = '%03d%% [%s]' % (percents, bar)
-            self.line.reprint(bar, self.line.def_width)
+            self._line.reprint(bar, self._line.def_width)
     def __exit__(self, exc_type, exc_value, traceback):
         if exc_type == None:
             timer_msg = '(' + format_time_delta(time() - self._enter_time) + ')'
             timer_len = len(timer_msg)
             timer_msg = wrap_color(5, timer_msg)
-            line = ' ' * (self.line.def_width - timer_len) + timer_msg
-            self.line.reprint(line, self.line.use_width, newline = True)
-            self.line.pop()
+            line = ' ' * (self._line.def_width - timer_len) + timer_msg
+            self._line.reprint(line, self._line.use_width, newline = True)
+            self._line.pop()
             return
-        self.line.append('', newline = True)
-        self.line.push(wrap_color(3, '[ERROR] '), 8)
+        self._line.append('', newline = True)
+        self._line.push(wrap_color(3, '[ERROR] '), 8)
         msg = 'Traceback:\n' + '\n'.join(format_tb(traceback))
         msg += '\n{}: {}'.format(exc_type.__name__, exc_value)
-        wrap_line = lambda l: wrap(l, width = self.line.def_width)
+        wrap_line = lambda l: wrap(l, width = self._line.def_width)
         for lines in map(wrap_line, msg.split('\n')):
             for line in lines:
-                self.line.append(line, newline = True)
-        self.line.pop()
+                self._line.append(line, newline = True)
+        self._line.pop()
         #raise Exception('Subtask has failed') from None
         raise SystemExit(1)
 

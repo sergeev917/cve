@@ -136,3 +136,5 @@ class SimpleDetectionsList(IDatasetAnnotation):
         if annotation == None:
             return self.storage_class()
         return annotation
+    def __len__(self):
+        return self._storage.__len__()

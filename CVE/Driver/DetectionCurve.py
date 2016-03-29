@@ -105,7 +105,7 @@ class DetectionCurveDriver(IEvaluationDriver):
         if verifier_instance.interpret_as != 'confidence-relative':
             raise Exception('only confidence-relative input is supported') # FIXME
         self.verifier = verifier_instance
-    def collect(self, verifier_output):
+    def collect(self, verifier_output, logger):
         # gathering size of confidence array to create:
         # we will use FP and TP confidence points
         need_conf_size = lambda out: out[0].shape[0] + out[1].shape[0]

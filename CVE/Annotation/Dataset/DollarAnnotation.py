@@ -130,3 +130,5 @@ class DollarAnnotation(IDatasetAnnotation):
     def __getitem__(self, sample_name):
         # getting item from underlying dictionary storage
         return self._storage.__getitem__(sample_name)
+    def __len__(self):
+        return self._storage.__len__()

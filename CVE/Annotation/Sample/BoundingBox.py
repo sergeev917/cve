@@ -28,6 +28,7 @@ class BoundingBoxSampleAnnotation:
     # in the BoundingBoxFieldAdapter class should be corrected accordingly
     # (whether order of fields or meaning was altered).
     def push(self, x_min, y_min, x_max, y_max):
+        # FIXME: column_stack here is inefficient!
         new_bbox_column = column_stack(([x_min, y_min, x_max, y_max],))
         self.value = hstack((self.value, new_bbox_column))
 

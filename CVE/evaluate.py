@@ -35,7 +35,7 @@ def evaluate(*args, **kwargs):
             self.workspace = {}
         def do_step(self):
             func, args, kwargs = self.queue.pop(0)
-            func(self.workspace, *args, **kwargs)
+            func(self.workspace, self.logger, *args, **kwargs)
         def execute(self):
             while len(self.queue) > 0:
                 self.do_step()
@@ -83,10 +83,7 @@ def evaluate(*args, **kwargs):
     # a plugin do observe the entire jobs queue and is free to modify it
     plugins = (x for x in args if isinstance(x, IPlugin))
     for plugin in plugins:
-        plugin_name = plugin.__class__.__qualname__
-        subtask_name = 'injecting {} plugin into the queue'.format(plugin_name)
-        with logger.subtask(subtask_name) as subtask:
-            plugin.inject(ev, logger = subtask)
+        plugin.inject(ev)
     # now doing all the planned work
     ev.execute()
     # cleaning the workspace up
@@ -97,28 +94,28 @@ def evaluate(*args, **kwargs):
 
 # standard jobs to be inserted into task-queue are defined here:
 # additional functionality could be inserted via plugins
-def setup_gt_dataset(workspace, role_dataset):
+def setup_gt_dataset(workspace, logger, role_dataset):
     workspace['env:dataset:gt'] = role_dataset.dataset
 
-def setup_eval_dataset(workspace, role_dataset):
+def setup_eval_dataset(workspace, logger, role_dataset):
     workspace['env:dataset:eval'] = role_dataset.dataset
 
-def setup_verifier(workspace, verifier):
+def setup_verifier(workspace, logger, verifier):
     workspace['env:verifier'] = verifier
 
-def setup_driver(workspace, driver):
+def setup_driver(workspace, logger, driver):
     workspace['env:driver'] = driver
 
-def do_verifier_config(workspace):
+def do_verifier_config(workspace, logger):
     gt_dataset = workspace['env:dataset:gt']
     eval_dataset = workspace['env:dataset:eval']
     workspace['env:verifier'].reconfigure(gt_dataset, eval_dataset)
 
-def do_driver_config(workspace):
+def do_driver_config(workspace, logger):
     verifier = workspace['env:verifier']
     workspace['env:driver'].reconfigure(verifier)
 
-def do_verifier_pass(workspace):
+def do_verifier_pass(workspace, logger):
     gt_dataset = workspace['env:dataset:gt']
     ev_dataset = workspace['env:dataset:eval']
     verify = workspace['env:verifier']
@@ -127,17 +124,30 @@ def do_verifier_pass(workspace):
     # iterating over ground-truth dataset as it has to declare
     # annotation for each sample (including empty annotation), whereas
     # tested annotation format could omit samples with no annotation.
-    for sample_name, gt_annotation in gt_dataset:
-        ev_annotation = ev_dataset[sample_name]
-        if ev_annotation == None:
-            ev_annotation = ev_dataset.storage_class()
-        storage.append(verify(gt_annotation, ev_annotation))
+    verifier_name = verify.__class__.__qualname__
+    subtask_name = 'verifying dataset samples with "{}"'.format(verifier_name)
+    def make_pass(ticker = None):
+        for sample_name, gt_annotation in gt_dataset:
+            ev_annotation = ev_dataset[sample_name]
+            if ev_annotation == None:
+                ev_annotation = ev_dataset.storage_class()
+            storage.append(verify(gt_annotation, ev_annotation))
+            ticker() if ticker else None # ticking the current sample
+    if logger:
+        gt_dataset_size = len(gt_dataset)
+        with logger.progress(subtask_name, gt_dataset_size) as spinner:
+            make_pass(spinner.tick)
+    else:
+        make_pass()
     workspace['tmp:verifier:pass'] = storage
 
-def do_driver_collect(workspace):
+def do_driver_collect(workspace, logger):
     # NOTE: `collect` is using the entire output of verifier (and not
     #       per-element) because we need to know (for example) how much
     #       memory to preallocate inside `collect`
     storage = workspace['tmp:verifier:pass']
-    collect = workspace['env:driver'].collect
-    workspace['export:driver'] = collect(storage)
+    driver = workspace['env:driver']
+    driver_name = driver.__class__.__qualname__
+    msg = 'processing verifier output with "{}"'.format(driver_name)
+    with logger.subtask(msg) as subtask_logger:
+        workspace['export:driver'] = driver.collect(storage, subtask_logger)

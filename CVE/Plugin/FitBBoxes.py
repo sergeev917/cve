@@ -74,7 +74,7 @@ class TuneBBoxesAnnotations(IPlugin):
         inserted_actions = setup + single_round * self.rounds
         ev.queue = queue[:ins_idx] + inserted_actions + queue[ins_idx:]
 
-def adjust_transformation(workspace):
+def adjust_transformation(workspace, logger):
     params = workspace.pop('export:driver')
     g = workspace['env:dataset:eval']._transformer
     g.x_shift, g.y_shift, g.x_scale, g.y_scale = params
@@ -84,7 +84,7 @@ class TuneBBoxesDriver(IEvaluationDriver):
         pass
     def reconfigure(self, verifier_instance):
         pass
-    def collect(self, verifier_output):
+    def collect(self, verifier_output, logger):
         elements_sum = empty(4, dtype = 'float64')
         elements_sum.fill(0.)
         elements_count = 0
@@ -192,3 +192,5 @@ class TuneProxyDataset(IDatasetAnnotation):
     def __iter__(self):
         for name, value in self._origin:
             yield name, self.storage_class(value)
+    def __len__(self):
+        return self._origin.__len__()
