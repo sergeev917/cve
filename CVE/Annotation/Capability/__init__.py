@@ -1,6 +1,7 @@
 __all__ = (
     'bounding_box_capability',
     'confidence_capability',
+    'blacklist_capability',
 )
 
 def get_slots(AnnotationClass):
@@ -28,6 +29,7 @@ def bounding_box_capability(AnnotationClass):
     annotations and that it is checked for capability-related logic. Also note
     that instance-related implementation will be invoked, so an instance could
     override logic behind the function.'''
+    # FIXME: add exception for Dataset instance argument
     # checking for an explicit capability implementation
     if hasattr(AnnotationClass, 'bounding_box_capability'):
         return lambda markup: markup.bounding_box_capability()

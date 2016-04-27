@@ -13,11 +13,13 @@ from sys import stdout
 
 color_scheme = (
     '',
-    '\033[m',
-    '\033[38;05;237m',
-    '\033[01;38;05;196m',
-    '\033[01;38;05;70m',
-    '\033[38;05;172m',
+    '\033[m', # reset color
+    '\033[38;05;237m', # grey for fillers
+    '\033[01;38;05;196m', # red, errors
+    '\033[01;38;05;70m', # green, good
+    '\033[38;05;172m', # yellowish, timer
+    '\033[01;38;05;62m', # blue, information
+    '\033[01;38;05;214m', # orange, warnings
 )
 def wrap_color(idx, text):
     return color_scheme[idx] + text + color_scheme[1]
@@ -38,6 +40,7 @@ def format_time_delta(seconds):
     return ' and '.join(map(lambda e: '{} {}'.format(*e), pair))
 
 class LineManager:
+    '''Controls line printing and prefixes stacking'''
     def __init__(self, width, file):
         self.use_width = width
         self.def_width = width
@@ -45,13 +48,15 @@ class LineManager:
         self._spacer = ''
         self._stack = []
         self._spacer_needed = True
-    def push(self, prefix, length = None):
-        if length == None:
+    def push(self, prefix, spacer = None, length = None):
+        if length is None:
             length = len(prefix)
+        if spacer is None:
+            spacer = ' ' * length
         assert(self.use_width >= length)
         self.append(prefix, length)
         self._stack.append(len(self._spacer))
-        self._spacer += ' ' * length
+        self._spacer += spacer
         self.def_width -= length
     def pop(self, count = 1):
         prev_spacer_size = len(self._spacer)
@@ -59,19 +64,21 @@ class LineManager:
         self._stack = self._stack[:-count]
         self.def_width += (prev_spacer_size - curr_spacer_size)
         self.use_width = self.def_width
-        self._spacer = ' ' * curr_spacer_size
+        self._spacer = self._spacer[:curr_spacer_size]
+    def message(self, message):
+        assert self.use_width > 0
+        wrap_line = lambda l: wrap(l, width = self.use_width)
+        for lines in map(wrap_line, message.split('\n')):
+            for line in lines:
+                self.append(line, newline = True)
     def append(self, text, length = None, **kwargs):
         newline = kwargs.get('newline', False)
-        flushright = kwargs.get('flushright', False)
         if length == None:
             length = len(text)
         assert(self.use_width >= length)
         if self._spacer_needed:
             self._spacer_needed = False
             text = self._spacer + text
-        if flushright:
-            text = ' ' * (self.use_width - length) + text
-            length = self.use_width
         if newline:
             text += '\n'
             self._spacer_needed = True
@@ -80,10 +87,8 @@ class LineManager:
             self.use_width -= length
         self._file.write(text)
         self._file.flush()
-    def reprint(self, text, length = None, **kwargs):
+    def reprint(self, text, **kwargs):
         newline = kwargs.get('newline', False)
-        if length == None:
-            length = len(text)
         text = '\r' + self._spacer + text
         if newline:
             self.use_width = self.def_width
@@ -94,119 +99,152 @@ class LineManager:
         self._file.flush()
 
 class SingleSubtask:
-    reserve_width = 9
-    def __init__(self, parent, descline, **kwargs):
-        self._line = parent._line
-        self.descline = descline
-        self.use_timer = kwargs.get('timer', True)
+    def __init__(self, parent, description_line, **kwargs):
+        '''Initializes a new subtask with given description'''
+        self._parent = parent
+        self._lineman = parent._lineman
+        self._description = description_line
+        self._use_timer = kwargs.get('timer', parent._use_timer)
     def __enter__(self):
-        self._line.push('@ ')
-        space = self._line.use_width - self.__class__.reserve_width
-        line = shorten(self.descline, width = space, placeholder = '...')
+        '''Printing the subtask description and starts timer if needed'''
+        # reverse space for okay/fail label on the right
+        space = self._lineman.use_width - 4
+        line = shorten(self._description, width = space, placeholder = '...')
+        # filling the space between the line end and the label with dots
         line += wrap_color(2, '.' * (space - len(line)))
-        self._line.append(line, space)
+        self._lineman.append(line, space)
+        # whether we need to print label on the right
+        # will be disabled when subtasks pushed
         self._need_status_label = True
-        if self.use_timer:
+        if self._use_timer:
             self._enter_time = time()
         return self
     def __exit__(self, exc_type, exc_value, traceback):
-        if self.use_timer:
-            timer_msg = '(' + format_time_delta(time() - self._enter_time) + ')'
-            colored_timer = wrap_color(5, timer_msg), len(timer_msg)
-        if exc_type == None:
+        if self._use_timer:
+            timer  = ' - took ' + format_time_delta(time() - self._enter_time)
+            color_time = wrap_color(5, timer), len(timer)
+        # printing okay/fail and additional info if needed
+        if exc_type is None:
             if self._need_status_label:
-                self._line.append(wrap_color(4, 'COMPLETED'), 9, newline = True)
-            self._line.pop()
-            self._line.append(*colored_timer, newline = True, flushright = True)
+                self._lineman.append(wrap_color(4, 'okay'), 4, newline = True)
+            if self._use_timer:
+                self._lineman.append(*color_time, newline = True)
             return
+        # failure case
         if self._need_status_label:
-            self._line.append(wrap_color(3, 'SHATTERED'), 9, newline = True)
-        # calculating current offset
-        self._line.push(wrap_color(3, '[ERROR] '), 8)
-        msg = 'Traceback:\n' + '\n'.join(format_tb(traceback))
-        msg += '\n{}: {}'.format(exc_type.__name__, exc_value)
-        wrap_line = lambda l: wrap(l, width = self._line.def_width)
-        for lines in map(wrap_line, msg.split('\n')):
-            for line in lines:
-                self._line.append(line, newline = True)
-        self._line.pop()
-        #raise Exception('Subtask has failed') from None
-        raise SystemExit(1)
+            self._lineman.append(wrap_color(3, 'fail'), 4, newline = True)
+        self.fail('{}: {}'.format(exc_type.__name__, exc_value))
+        raise
     def subtask(self, descline, **kwargs):
         # now we're displaying dotted line with pending COMPLETED/SHATTERED:
         # since now there is a subtask requested, we need to indicate that
         self._need_status_label = False
-        self._line.append(wrap_color(4, 'SUBTASKED'), 9, newline = True)
+        self._lineman.append(wrap_color(4, '-**-'), 4, newline = True)
         return SingleSubtask(self, descline, **kwargs)
     def progress(self, descline, ticks):
         self._need_status_label = False
-        self._line.append(wrap_color(4, 'SUBTASKED'), 9, newline = True)
+        self._lineman.append(wrap_color(4, '-**-'), 4, newline = True)
         return SpinnerSubtask(self, descline, ticks)
+    def info(self, message):
+        self._parent.info(message)
+    def warn(self, message):
+        self._parent.warn(message)
+    def fail(self, message):
+        self._parent.fail(message)
 
 class SpinnerSubtask:
-    def __init__(self, parent, descline, ticks = 100):
-        self._line = parent._line
-        self.descline = descline
-        self._fullticks = ticks
-        self._fill = ('|', '|')#'\u00b7')
+    def __init__(self, parent, description_line, ticks, **kwargs):
+        '''Initializes a new loopy subtask with given description'''
+        # percentage step to print after
+        percentage_step = kwargs.get('period', 5)
+        self._print_period = ticks * percentage_step // 100
+        self._all_ticks = ticks
+        self._parent = parent
+        self._lineman = parent._lineman
+        self._description = description_line
+        self._use_timer = kwargs.get('timer', parent._use_timer)
     def __enter__(self):
-        self._line.push('@ ')
-        self._enter_time = time()
-        self._currticks = 0
-        self._filled_dots = 0
-        space = self._line.use_width - 8
-        line = shorten(self.descline, width = space, placeholder = '...')
+        if self._use_timer:
+            self._enter_time = time()
+        self._curr_ticks = 0
+        self._next_threshold = 0
+        # reserving space for percentage
+        space = self._lineman.use_width - 4
+        line = shorten(self._description, width = space, placeholder = '...')
         line += wrap_color(2, '.' * (space - len(line)))
-        line += wrap_color(4, 'PROGRESS')
-        self._line.append(line, self._line.use_width, newline = True)
-        self._bar_size = self._line.use_width - 7
+        self._prefix = line
+        self._push_label(wrap_color(3, '  0%'))
         return self
-    def tick(self, count = 1):
-        self._currticks += count
-        self.__bar__()
-    def __bar__(self):
-        dots = trunc(self._bar_size * self._currticks / self._fullticks)
-        dots = min(dots, self._bar_size)
-        if self._filled_dots != dots:
-            self._filled_dots = dots
-            percents = trunc(100. * self._currticks / self._fullticks)
-            bar = wrap_color(4, self._fill[0] * dots)
-            bar += wrap_color(2, self._fill[1] * (self._bar_size - dots))
-            bar = '%03d%% [%s]' % (percents, bar)
-            self._line.reprint(bar, self._line.def_width)
     def __exit__(self, exc_type, exc_value, traceback):
-        if exc_type == None:
-            timer_msg = '(' + format_time_delta(time() - self._enter_time) + ')'
-            timer_len = len(timer_msg)
-            timer_msg = wrap_color(5, timer_msg)
-            line = ' ' * (self._line.def_width - timer_len) + timer_msg
-            self._line.reprint(line, self._line.use_width, newline = True)
-            self._line.pop()
+        if self._use_timer:
+            timer  = ' - took ' + format_time_delta(time() - self._enter_time)
+            color_time = wrap_color(5, timer), len(timer)
+        if exc_type is None:
+            self._push_label(wrap_color(4, 'okay'))
+            self._lineman.append('', newline = True)
+            if self._use_timer:
+                self._lineman.append(*color_time, newline = True)
             return
-        self._line.append('', newline = True)
-        self._line.push(wrap_color(3, '[ERROR] '), 8)
-        msg = 'Traceback:\n' + '\n'.join(format_tb(traceback))
-        msg += '\n{}: {}'.format(exc_type.__name__, exc_value)
-        wrap_line = lambda l: wrap(l, width = self._line.def_width)
-        for lines in map(wrap_line, msg.split('\n')):
-            for line in lines:
-                self._line.append(line, newline = True)
-        self._line.pop()
-        #raise Exception('Subtask has failed') from None
-        raise SystemExit(1)
+        self._push_label(wrap_color(3, 'fail'))
+        self._lineman.append('', newline = True)
+        self.fail('{}: {}'.format(exc_type.__name__, exc_value))
+        raise
+    def tick(self, count = 1):
+        self._curr_ticks += count
+        if self._curr_ticks >= self._next_threshold:
+            self._next_threshold += self._print_period
+            percentage = 100 * self._curr_ticks // self._all_ticks
+            percentage = wrap_color(4, '{:3d}%'.format(percentage))
+            self._push_label(percentage)
+    def _push_label(self, label):
+        self._lineman.reprint(self._prefix + label)
+    def info(self, message):
+        self._parent.info(message)
+    def warn(self, message):
+        self._parent.warn(message)
+    def fail(self, message):
+        self._parent.fail(message)
+
+class DevnullLog:
+    __dummy__ = True
+    def __enter__(self):
+        return self
+    def __exit__(self, exc_type, exc_value, traceback):
+        pass
+    def subtask(self, *args, **kwargs):
+        return self
+    def progress(self, *args, **kwargs):
+        return self
+    def tick(self, *args, **kwargs):
+        pass
+    def info(self, message):
+        pass
+    def warn(self, message):
+        pass
+    def fail(self, message):
+        pass
 
 class ConsoleLog:
     __dummy__ = False
-    def __init__(self, file = stdout):
-        term_sizes = get_terminal_size()
-        self._line = LineManager(term_sizes.columns, file)
-    def subtask(self, descline, **kwargs):
-        return SingleSubtask(self, descline, **kwargs)
-    def progress(self, descline, ticks):
-        return SpinnerSubtask(self, descline, ticks)
+    def __init__(self, file = stdout, **kwargs):
+        self._use_timer = kwargs.get('timer', False)
+        line_width = 60
+        if file.isatty():
+            line_width = get_terminal_size().columns
+        self._lineman = LineManager(line_width, file)
+    def subtask(self, description_line, **kwargs):
+        return SingleSubtask(self, description_line, **kwargs)
+    def progress(self, description_line, ticks):
+        return SpinnerSubtask(self, description_line, ticks)
     def info(self, message):
-        print(message)
+        self._lineman.push(wrap_color(6, '[INFO] '), None, 7)
+        self._lineman.message(message)
+        self._lineman.pop()
     def warn(self, message):
-        print(message)
+        self._lineman.push(wrap_color(7, '[WARN] '), None, 7)
+        self._lineman.message(message)
+        self._lineman.pop()
     def fail(self, message):
-        print(message)
+        self._lineman.push(wrap_color(3, '[FAIL] '), None, 7)
+        self._lineman.message(message)
+        self._lineman.pop()

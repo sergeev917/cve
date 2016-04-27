@@ -4,11 +4,13 @@ __all__ = (
     'get_default_logger',
 )
 
-from .Console import ConsoleLog
+from .Console import (
+    ConsoleLog,
+    DevnullLog,
+)
 
 # default logger is not set by default
-#default_logger = None # FIXME
-default_logger = ConsoleLog()
+default_logger = DevnullLog()
 
 def set_default_logger(logger):
     global default_logger
