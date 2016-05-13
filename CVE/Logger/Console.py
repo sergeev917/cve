@@ -228,7 +228,7 @@ class ConsoleLog:
     __dummy__ = False
     def __init__(self, file = stdout, **kwargs):
         self._use_timer = kwargs.get('timer', False)
-        line_width = 60
+        line_width = 80
         if file.isatty():
             line_width = get_terminal_size().columns
         self._lineman = LineManager(line_width, file)

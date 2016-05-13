@@ -114,6 +114,7 @@ class DollarAnnotation(IDatasetAnnotation):
                     'Dollar format prohibits subdirectories'
                 )
             # now, version is fixed, reading annotation lines
+            # FIXME: SHOULD preallocate memory for improved performance
             markup_obj = self.storage_class()
             for line in markup_file:
                 field_values = tuple(map(str.strip, line.split()))

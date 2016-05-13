@@ -27,7 +27,6 @@ class BoundingBoxIoUVerifier(IVerifier):
         'threshold',
         'interpret_as'
     )
-
     def reconfigure(self, gt_dataset, eval_dataset):
         gt_storage_class = gt_dataset.storage_class
         eval_storage_class = eval_dataset.storage_class
@@ -64,12 +63,14 @@ class BoundingBoxIoUVerifier(IVerifier):
                     return len(indices)
                 return store_info
         self.store_info_prepare = store_info_prepare
-
     def __init__(self, threshold = None):
         self.threshold = threshold
         if self.threshold == None:
             self.threshold = finfo(float32).eps
-
+    def mode_output_getter(self, mode_index):
+        if mode_index == 0:
+            return lambda *args: (self.__call__(*args),) # FIXME: push into __call__
+        return lambda: self
     def __call__(self, base_sample, test_sample):
         base_set = self.get_base_bbox(base_sample)
         test_set = self.get_test_bbox(test_sample)
@@ -97,9 +98,10 @@ class BoundingBoxIoUVerifier(IVerifier):
             else:
                 fn_count += 1
         store_info = self.store_info_prepare(test_sample)
+        # FIXME: need additional class for that (at least for unconditional-number/confidence)
         return (
-            store_info(tp_idx[:tp_idx_top]),
-            store_info(fp_idx),
-            fn_count,
-            multicount,
+            store_info(tp_idx[:tp_idx_top]), # confidences of true-positives
+            store_info(fp_idx), # confidences of false-positives
+            fn_count, # number of false-negatives
+            multicount, # number of multi-detected objects (bad nms)
         )

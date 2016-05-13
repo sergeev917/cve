@@ -3,12 +3,13 @@ __contact__ = 'sergeev917@gmail.com'
 
 __all__ = (
     'IEvaluationDriver',
-    'IPlugin',
     'IVerifier',
     'UnrecognizedAnnotationFormat',
     'ViolatedAnnotationFormat',
     'IDatasetAnnotation',
 )
+
+from operator import itemgetter
 
 class UnrecognizedAnnotationFormat(Exception):
     def __init__(self, message):
@@ -18,53 +19,55 @@ class ViolatedAnnotationFormat(Exception):
     def __init__(self, message):
         Exception.__init__(self, message)
 
+def _raise_not_implemented(obj, function_name):
+    derived_class_name = obj.__class__.__qualname__
+    message = '"{}" class has no implementation of "{}"'.format(
+        derived_class_name,
+        function_name,
+    )
+    raise NotImplementedError(message)
+
 class IDatasetAnnotation:
     '''Represents interface of a dataset annotation class.
 
     This class is supposed to be used as a base class for specialized
     implementations designed for particular formats of ground-truth
-    data or output of object-detection algorithms.'''
+    data or output of object-detection algorithms. Note that IDatasetAnnotation
+    does not inherit DependencyFlowNode since the role of a plain dataset class
+    is not defined. See CVE.Roles for the further information.'''
 
     __slots__ = () # since this class won't have any attribute fields
 
     def __init__(self, path):
         '''Loads annotation from given path.'''
-        raise NotImplementedError('Base DatasetAnnotation.__init__ is used')
+        _raise_not_implemented(self, '__init__')
     def __getitem__(self, sample_name):
-        raise NotImplementedError('Base DatasetAnnotation.__getitem__ is used')
+        _raise_not_implemented(self, '__getitem__')
     def __setitem__(self, sample_name, new_value):
-        raise NotImplementedError('Base DatasetAnnotation.__setitem__ is used')
-    def __delitem__(self, sample_name):
-        raise NotImplementedError('Base DatasetAnnotation.__delitem__ is used')
+        _raise_not_implemented(self, '__setitem__')
     def __iter__(self):
-        raise NotImplementedError('Base DatasetAnnotation.__iter__ is used')
+        _raise_not_implemented(self, '__iter__')
 
 class IVerifier:
     '''A class for actual verifiers to be inhereted from'''
     def __init__(self, AnnotationClass):
-        '''Construct a verifier instance with AnnotationClass class
+        '''Construct a verifier instance with AnnotationClass class.
 
-        AnnotationClass class must be the only argument __init__ has. It is here
-        to configure verifier properly based on the information which will be
-        available in annotation: like bounding-box capatibilities and so on.'''
-        pass
+        AnnotationClass class must be the only argument __init__ has. It is
+        here to configure verifier properly based on the information which
+        will be available in annotation: like bounding-box capatibilities.
+        Note that the __init__ here is simply to provide the interface
+        specification and reasonable error message. It should not be invoked
+        in inherited code. Nevertheless, DependencyFlowNode should be
+        configured.'''
+        _raise_not_implemented(self, '__init__')
     def __call__(self, base_sample, test_sample):
         '''Verify two annotations which belong to gt and tested markup'''
-        pass
-
-class IPlugin:
-    '''A class for an actual plugin to be inherited from'''
-    def inject(self, evaluator):
-        derived_classname = self.__class__.__qualname__
-        raise NotImplementedError(
-            'missing inject() implementation in {}'.format(derived_classname)
-        )
+        _raise_not_implemented(self, '__call__')
 
 class IEvaluationDriver:
-    '''A class for actual evaluation drivers to be inhereted from'''
-    def __init__(self):
-        pass
-    def collect(self):
+    '''A class for actual evaluation drivers to be inherited from'''
+    def collect(self): #FIXME: arguments and docs
         pass
     def finalize(self):
         pass

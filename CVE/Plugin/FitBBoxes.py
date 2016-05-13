@@ -10,7 +10,6 @@ from numpy import (
     argmax,
 )
 from ..Base import (
-    IPlugin,
     IDatasetAnnotation,
     IEvaluationDriver,
     IVerifier,
@@ -30,7 +29,7 @@ from ..Annotation.Sample import BoundingBoxSampleAnnotation
 from ..Verifier.BoundingBoxCmp import find_best_iou
 from ..Logger import get_default_logger
 
-class TuneBBoxesAnnotations(IPlugin):
+class TuneBBoxesAnnotations:
     '''Applies global scale and translate transform to annotations
 
     The given setup_idx index must point to a configuration function which

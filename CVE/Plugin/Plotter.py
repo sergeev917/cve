@@ -1,7 +1,6 @@
 # coding: utf8
 __all__ = ('Plotter2D',)
 
-from ..Base import IPlugin
 from ..Logger import get_default_logger
 from matplotlib import use
 from matplotlib.pyplot import figure, axes
@@ -12,7 +11,7 @@ use('AGG')
 
 # FIXME: allow standalone workflow to plot multiple curves
 
-class Plotter2D(IPlugin):
+class Plotter2D:
     '''Produces an image with a plotted curve of a function'''
     def __init__(self, save_path, **opts):
         # making a deep copy to prevent mutability issues
