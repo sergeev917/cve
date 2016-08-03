@@ -6,38 +6,25 @@ __all__ = (
 )
 
 from ..Base import IDatasetAnnotation
+from ..FlowBuilder import DataInjectorNode
 
 # FIXME: rename dataset with _dataset after migration
+# FIXME: remove dependency from IDatasetAnnotation if it does not implement
+#        some base stuff
 
-class GroundTruthDataset:
+class GroundTruthDataset(DataInjectorNode):
     '''An object wrapper which indicates that the wrapped object is GT'''
-    __slots__ = ('dataset',)
     def __init__(self, dataset):
         if not isinstance(dataset, IDatasetAnnotation):
             raise Exception('The dataset must inherit from IDatasetAnnotation') # FIXME
-        # we have a single mode: require nothing and provide dataset/gt
-        DependencyFlowNode.__init__(self, [([], ['dataset/ground-truth'])])
-        self.dataset = dataset
-    def mode_output_getter(self, mode_index):
-        # assuming that the given index is correct
-        return lambda: (self.dataset,)
-    def configure(self, mode_index, input_classes):
-        return (self.dataset.__class__,)
+        DataInjectorNode.__init__(self, {'dataset:ground-truth': dataset})
 
-class EvaluatedDataset:
+class EvaluatedDataset(DataInjectorNode):
     '''An object wrapper which indicates that the wrapped object is tested'''
-    __slots__ = ('dataset',)
     def __init__(self, dataset):
         if not isinstance(dataset, IDatasetAnnotation):
             raise Exception('The dataset must inherit from IDatasetAnnotation') # FIXME
-        # we have a single mode: require nothing and provide dataset/eval
-        DependencyFlowNode.__init__(self, [([], ['dataset/evaluated'])])
-        self.dataset = dataset
-    def mode_output_getter(self, mode_index):
-        # assuming that the given index is correct
-        return lambda: (self.dataset,)
-    def configure(self, mode_index, input_classes):
-        return (self.dataset.__class__,)
+        DataInjectorNode.__init__(self, {'dataset:testing': dataset})
 
 def asGtDataset(dataset):
     return GroundTruthDataset(dataset)
