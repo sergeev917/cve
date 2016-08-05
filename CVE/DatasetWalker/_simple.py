@@ -2,6 +2,7 @@ __all__ = (
     'SimpleWalker',
 )
 
+from ..Logger import get_default_logger
 from ..FlowBuilder import (
     FlowBuilder,
     PureStaticNode,
@@ -13,12 +14,14 @@ from ..FlowBuilder import (
 
 class SimpleWalker:
     def __init__(self, **kwargs):
+        self._logger = kwargs.get('logger', get_default_logger())
+        self._progress = kwargs.get('progress', True)
+        # mode-support code
         self._recorded_modes = []
         self._recorded_mode_kind = []
         self._saved_replies = {}
     def dynamic_contracts(self, target_name, present_resources):
         required_prefix = 'assessment-list:'
-        print(target_name)
         if not target_name.startswith(required_prefix):
             return []
         saved_reply = self._saved_replies.get(target_name, None)
@@ -87,6 +90,14 @@ class SimpleWalker:
             raise RuntimeError() # FIXME
         elif len(funcs) == 0:
             raise RuntimeError() # FIXME
+        use_ticks = self._progress
+        msg = 'walking through datasets with verifier'
+        if use_ticks is True:
+            def start_log(count):
+                return self._logger.progress(msg, count)
+        else:
+            def start_log(count):
+                return self._logger.subtask(msg)
         do_assessment, output_type_info = funcs[0]
         def execute(gt_dataset, ts_dataset, verifier):
             # we have already grabbed verifier object via its type information
@@ -98,11 +109,14 @@ class SimpleWalker:
             # this is the core of dataset walker -- to pick matching pairs
             # of annotations and run the selected verifier on them
             assessment_list = []
-            for sample_name, gt_ann in gt_dataset:
-                gt_sample.data = gt_ann
-                ts_sample.data = ts_dataset[sample_name] # FIXME: add get(None)
-                # since construct()-provided functions return list of values,
-                # we need to extract the first field (and the only field)
-                assessment_list.append(do_assessment()[0])
+            with start_log(len(gt_dataset)) as tasklog:
+                tick = tasklog.tick if use_ticks else None
+                for sample_name, gt_ann in gt_dataset:
+                    gt_sample.data = gt_ann
+                    ts_sample.data = ts_dataset[sample_name] # FIXME: add get(None)
+                    # since construct()-provided functions return list of values,
+                    # we need to extract the first field (and the only field)
+                    assessment_list.append(do_assessment()[0])
+                    tick and tick()
             return assessment_list
         return execute, (ResourceTypeInfo(list, elem_type = output_type_info),)

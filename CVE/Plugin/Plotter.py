@@ -5,6 +5,7 @@ __all__ = (
 
 from re import match
 from re import compile as _compile
+from ..Logger import get_default_logger
 from matplotlib import use
 from matplotlib.pyplot import figure, axes
 from matplotlib.font_manager import FontProperties
@@ -20,6 +21,7 @@ class CurvePlotter2D:
     _curve_pattern = _compile('^analysis:(?P<problem_class>[^:]+):' \
                               'curve-(?P<y_entity>[^(]+)\((?P<x_entity>[^)]+)\)$')
     def __init__(self, image_out_path, **opts):
+        self._logger = opts.get('logger', get_default_logger())
         # making a deep copy to prevent mutability issues
         self.config = dict(opts)
         self.config['out_path'] = image_out_path
@@ -111,7 +113,13 @@ class CurvePlotter2D:
             if 'label' in options:
                 g.legend(loc = 'lower left', prop = font_prop_obj)
             f.savefig(img_out_path, bbox_inches = 'tight')
-        return worker_func, (None,)
+        if self._logger.__dummy__:
+            return worker_func, (None,)
+        # need to make a logger wrapped worker
+        def log_wrapped_worker(*args, **kwargs):
+            with self._logger.subtask('producing the curve image'):
+                return worker_func(*args, **kwargs)
+        return log_wrapped_worker, (None,)
 
 # labels to be plotted on a graph to describe what axis shows
 entity_labels = {

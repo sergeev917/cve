@@ -654,7 +654,6 @@ class FlowBuilder:
                 # give us the resource
                 target = track.next_target()
                 options = lookup_providers(target, track.resources())
-                print('options @{}: {}'.format(target, options))
                 # drop the options we can't use since they are already used,
                 # that is to avoid looping for override-providers
                 options = list(filter(usage.is_eligible, options))
@@ -858,7 +857,6 @@ class FlowBuilder:
                 modes = node.dynamic_contracts(resource_name, available_res)
                 options += map(lambda mode_id: (prov_idx, mode_id), modes)
             return options
-        print('static lookup index is as: {}'.format(static_providers_index))
         return _lookup_providers
     def construct(self, targets_list):
         configuration_sets = self._find_build_steps(

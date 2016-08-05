@@ -19,6 +19,7 @@ from numpy import (
 from collections import namedtuple
 from ..Base import DetectionConfidenceAssessment
 from ..FlowBuilder import ResourceTypeInfo
+from ..Logger import get_default_logger
 
 CurveData2d = namedtuple(
     'CurveData2d',
@@ -100,6 +101,7 @@ available_handlers = {
 
 class DetectionPerformanceCurve:
     def __init__(self, **kwargs):
+        self._logger = kwargs.get('logger', get_default_logger())
         axis_drv = kwargs.get('mode', ('precision', 'recall'))
         if axis_drv[0] not in available_handlers:
             raise Exception('unknown notion "{}" is requested for v-axis'.format(axis_drv[0])) # FIXME
@@ -223,4 +225,10 @@ class DetectionPerformanceCurve:
             filled_auc = y_points[0] * x_points[0]
             map_data = MeanAvgPrecisionData(fair_auc + filled_auc, filled_auc)
             return curve_data, map_data
-        return worker, output_types
+        if self._logger.__dummy__:
+            return worker, output_types
+        # wrap into logger here
+        def log_wrapped_worker(*args, **kwargs):
+            with self._logger.subtask('analysing data to produce PR-curve'):
+                return worker(*args, **kwargs)
+        return log_wrapped_worker, output_types
