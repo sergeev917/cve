@@ -30,6 +30,11 @@ class ResourceTypeInfo:
     def __init__(self, type_cls, **kwargs):
         self.type_cls = type_cls
         self.aux_info = dict(kwargs)
+    def __repr__(self):
+        desc = '<ResourceTypeInfo: type = {}'.format(self.type_cls)
+        if self.aux_info:
+            desc += ' aux = {}'.format(self.aux_info)
+        return desc + '>'
 
 class PureStaticNode:
     __slots__ = ('_contracts',)
@@ -561,13 +566,22 @@ class _ChainerStorage:
         self._data = [None] * room_count
         self._type = [None] * room_count
     def get_type_info(self, indices):
-        return map(self._type.__getitem__, indices)
+        return [self._type[i] for i in indices]
     def update_type_info(self, types_and_indices):
         for index, new_type_info in types_and_indices:
             if index is not None:
                 self._type[index] = new_type_info
     def discard_type_info(self):
         self._type = None
+    def reset_data(self):
+        # note that we can't drop the list instance itself since
+        # we made closures on it inside wrapper functions;
+        for data_idx in range(len(self._data)):
+            self._data[data_idx] = None
+    def get_data(self, indices = None):
+        if indices is None:
+            return list(self._data)
+        return [self._data[i] for i in indices]
     def wrap_function(self, func, input_indices, output_indices):
         data_fmt = lambda i: 'd[{}]'.format(i)
         data_fmt_chk = lambda i: 'd[{}]'.format(i) if i is not None else '__'
@@ -588,19 +602,9 @@ class _ChainerStorage:
         def deleter():
             d[i] = None
         return deleter
-    def reset_data(self):
-        # note that we can't drop the list instance itself since
-        # we made closures on it inside wrapper functions;
-        for data_idx in range(len(self._data)):
-            self._data[data_idx] = None
-    def get_data(self, indices = None):
-        if indices is None:
-            return list(self._data)
-        return [self._data[i] for i in indices]
 
 class FlowBuilder:
     def __init__(self):
-        self._injected = [] # injected resource names to build
         self._nodeobjs = [] # providers objects storage
         self._nodeprio = [] # provider index -> provider priority
         self._next_prio = 0 # the next priority to use by default
@@ -611,12 +615,8 @@ class FlowBuilder:
             ['static_contracts', 'dynamic_contracts'],
         )
         if not any(contract_modes_supported):
-            raise RuntimeError('given node has nothing to provide')
-        # remembering injected target resources if any
-        try:
-            self._injected += provider_obj.injected_targets()
-        except AttributeError:
-            pass
+            msg = 'node {} has no contract listing interface'
+            raise RuntimeError(msg.format(provider_obj))
         # storing the provider itself and setting its priority
         self._nodeobjs.append(provider_obj)
         if priority is None:
@@ -653,9 +653,8 @@ class FlowBuilder:
                 # needs to be resolved and looking up for providers which can
                 # give us the resource
                 target = track.next_target()
-                print('looking for target {}'.format(target))
                 options = lookup_providers(target, track.resources())
-                print('options: {}'.format(options))
+                print('options @{}: {}'.format(target, options))
                 # drop the options we can't use since they are already used,
                 # that is to avoid looping for override-providers
                 options = list(filter(usage.is_eligible, options))
@@ -766,7 +765,7 @@ class FlowBuilder:
             for curr_prov_id, prov_info in add_providers:
                 # looking up the contract of the provider
                 prov_id, mode_id = prov_info
-                contract = self._nodeobjs[prov_id].static_contracts()[mode_id]
+                contract = self._nodeobjs[prov_id].get_contract(mode_id)
                 # matching require-part of the contract with dependencies ids
                 deps_ids = _extract_resources(_lookup_deps(curr_prov_id))
                 input_ids = map(deps_ids.__getitem__, contract[0])
@@ -859,23 +858,17 @@ class FlowBuilder:
                 modes = node.dynamic_contracts(resource_name, available_res)
                 options += map(lambda mode_id: (prov_idx, mode_id), modes)
             return options
+        print('static lookup index is as: {}'.format(static_providers_index))
         return _lookup_providers
-    def construct(self, targets_list = None):
-        if targets_list is None:
-            if len(self._injected) == 0:
-                raise RuntimeError('no target to build')
-            targets_list = []
-        actual_targets = targets_list + self._injected
-        valid_seqs = self._find_build_steps(
-            actual_targets,
+    def construct(self, targets_list):
+        configuration_sets = self._find_build_steps(
+            targets_list,
             self._build_contracts_lookup(),
         )
-        if len(valid_seqs) == 0:
-            return actual_targets, []
         acceptable_workers = []
-        for seq in valid_seqs:
+        for config in configuration_sets:
             invoke_list = []
-            actions, rooms, targets = self._build_actions(*seq, targets_list)
+            actions, rooms, targets = self._build_actions(*config, targets_list)
             chainer = _ChainerStorage(rooms)
             for prov_inf, in_ids, out_ids in actions:
                 if prov_inf is None:
@@ -901,12 +894,13 @@ class FlowBuilder:
                     worker = chainer.wrap_function(worker, in_ids, out_ids)
                     invoke_list.append(worker)
             if invoke_list is not None:
+                output_type_info = tuple(chainer.get_type_info(targets))
                 chainer.discard_type_info()
                 def execute():
-                    for exec_step_func in invoke_list:
-                        exec_step_func()
-                    results = chainer.get_data(targets)
+                    for do_step in invoke_list:
+                        do_step()
+                    data = chainer.get_data(targets)
                     chainer.reset_data()
-                    return results
-                acceptable_workers.append(execute)
+                    return data
+                acceptable_workers.append((execute, output_type_info))
         return acceptable_workers

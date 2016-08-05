@@ -1,7 +1,5 @@
 __all__ = (
-    'Plotter2D',
-    'TuneBBoxesAnnotations',
+    'CurvePlotter2D',
 )
 
-from .Plotter import Plotter2D
-from .FitBBoxes import TuneBBoxesAnnotations
+from .Plotter import CurvePlotter2D

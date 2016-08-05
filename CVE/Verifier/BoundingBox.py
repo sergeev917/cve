@@ -1,7 +1,6 @@
 __all__ = ('BoundingBoxIoUVerifier',)
 
 from .BoundingBoxCmp import find_best_iou
-from ..Base import IVerifier
 from ..Annotation.Capability import (
     bounding_box_capability,
     confidence_capability,
@@ -17,91 +16,122 @@ from numpy import (
     flatnonzero,
     logical_and,
 )
+from operator import itemgetter
+from ..FlowBuilder import ResourceTypeInfo
+from ..Base import DetectionSimpleAssessment, DetectionConfidenceAssessment
 
-class BoundingBoxIoUVerifier(IVerifier):
-    __slots__ = (
-        'get_base_bbox',
-        'get_test_bbox',
-        'get_non_blacklisted',
-        'store_info_prepare',
-        'threshold',
-        'interpret_as'
-    )
-    def reconfigure(self, gt_dataset, eval_dataset):
-        gt_storage_class = gt_dataset.storage_class
-        eval_storage_class = eval_dataset.storage_class
-        self.get_base_bbox = bounding_box_capability(gt_storage_class)
-        self.get_test_bbox = bounding_box_capability(eval_storage_class)
-        try:
-            get_non_blacklisted = blacklist_capability(gt_storage_class)
-        except: # FIXME
-            # no blacklist is given, so everything is not blacklisted
-            def get_non_blacklisted(sample_markup):
-                elem_count = self.get_base_bbox(sample_markup).shape[0]
-                non_blacklisted = ndarray((elem_count,),
-                                          dtype = 'bool',
-                                          shape = 'C')
-                non_blacklisted.fill(True)
-                return non_blacklisted
-        self.get_non_blacklisted = get_non_blacklisted
-        try:
-            # if confidence output is available then we will return
-            # confidences at which TP/FP are produced.
-            get_conf = confidence_capability(eval_storage_class)
-            def store_info_prepare(test_sample):
-                confids = get_conf(test_sample)
-                def store_info(indices):
-                    return apply_along_axis(confids.__getitem__, 0, indices)
-                return store_info
-            self.interpret_as = 'confidence-relative'
-        except: # FIXME
-            # if there is no confidence output we will simply return
-            # count of FP and TP instead of their confidences.
-            self.interpret_as = 'unconditional-numbers'
-            def store_info_prepare(test_sample):
-                def store_info(indices):
-                    return len(indices)
-                return store_info
-        self.store_info_prepare = store_info_prepare
+class BoundingBoxIoUVerifier:
     def __init__(self, threshold = None):
-        self.threshold = threshold
-        if self.threshold == None:
-            self.threshold = finfo(float32).eps
-    def mode_output_getter(self, mode_index):
-        if mode_index == 0:
-            return lambda *args: (self.__call__(*args),) # FIXME: push into __call__
-        return lambda: self
-    def __call__(self, base_sample, test_sample):
-        base_set = self.get_base_bbox(base_sample)
-        test_set = self.get_test_bbox(test_sample)
-        non_blacklisted_gt = self.get_non_blacklisted(base_sample) # FIXME
-        indices, scores = find_best_iou(base_set, test_set)
-        # resetting indices of low-iou matches to '-1' (so they become FP)
-        indices[scores < self.threshold] = -1
-        # false positives are accounted by checking no-gt-mapped detections
-        fp_idx = flatnonzero(indices == -1)
-        gt_size = base_set.shape[1]
-        # NOTE: tp_idx uses preallocated storage to prevent reallocations:
-        #       maximum count of tp is gt_size, usage is tracked by tp_idx_top
-        tp_idx = empty(gt_size, order = 'C', dtype = 'int32')
-        tp_idx_top = fn_count = multicount = 0
-        # checking for TP/FN records: only non-blacklisted records are processed
-        # FIXME: could be optimized
-        for idx in flatnonzero(non_blacklisted_gt):
-            match_indices = indices == idx
-            if match_indices.any():
-                match_iou_scores = scores[match_indices]
-                multicount += (match_iou_scores.shape[0] - 1)
-                selected_idx = argmax(match_iou_scores)
-                tp_idx[tp_idx_top] = selected_idx
-                tp_idx_top += 1
-            else:
-                fn_count += 1
-        store_info = self.store_info_prepare(test_sample)
-        # FIXME: need additional class for that (at least for unconditional-number/confidence)
+        self._contracts = [
+            ((), ('verifier:gt-vs-test:object-detection',)),
+            (
+                ('sample:ground-truth', 'sample:testing'),
+                ('assessment:gt-vs-test:object-detection',),
+            ),
+        ]
+        if threshold == None:
+            threshold = finfo(float32).eps
+        self._threshold = threshold
+    def static_contracts(self):
+        return self._contracts
+    def get_contract(self, mode_id):
+        return self._contracts[mode_id]
+    def setup(self, mode_id, input_types, output_mask):
+        # there is only one output resource (assessment), if it is marked
+        # as not-required then we can return with nothing right away
+        if output_mask[0] == False:
+            return lambda *args: None, (None,)
+        # check simpler mode 0 which is used to present the object itself
+        if mode_id == 0:
+            return lambda: self, (ResourceTypeInfo(self.__class__, vrf_obj = self),)
+        # from now on we consider ourselves in mode 1: do assessment;
+        # on input we have two arguments: gt data and test data (single sample)
+        gt_cls, ts_cls = map(lambda x: x.type_cls, input_types)
+        get_gt_bbox = bounding_box_capability(gt_cls)
+        get_ts_bbox = bounding_box_capability(ts_cls)
+        # only get_bbox-functions are mandatory, everything else is optional
+        # but will be automatically attached when available
+        format_dict = {'threshold': self._threshold}
+        vars_to_inject = [
+            ('find_best_iou', find_best_iou),
+            ('empty', empty),
+            ('argmax', argmax),
+            ('get_gt_bbox', get_gt_bbox),
+            ('get_ts_bbox', get_ts_bbox),
+        ]
+        try:
+            get_confidences = confidence_capability(ts_cls)
+            output_class = DetectionConfidenceAssessment
+            vars_to_inject += [
+                ('get_confidences', get_confidences),
+                ('flatnonzero', flatnonzero),
+                ('OutputClass', output_class),
+                ('apply_along_axis', apply_along_axis),
+            ]
+            format_dict['process_fp_indices'] = \
+                'fp_indices = flatnonzero(indices == -1)'
+            format_dict['optional_conf_by_idx_setup'] = \
+                'conf_by_idx = get_confidences(ts_data).__getitem__'
+            format_dict['create_result_object'] = \
+                'OutputClass(' \
+                    'apply_along_axis(conf_by_idx, 0, tp_indices[:tp_count]),' \
+                    'apply_along_axis(conf_by_idx, 0, fp_indices),' \
+                    'fn_count,' \
+                    'multicount,' \
+                ')'
+        except: # FIXME
+            output_class = DetectionSimpleAssessment
+            vars_to_inject += [
+                ('count_nonzero', count_nonzero),
+                ('OutputClass', output_class),
+            ]
+            format_dict['process_fp_indices'] = \
+                'fp_count = count_nonzero(indices == -1)'
+            format_dict['create_result_object'] = \
+                'OutputClass(' \
+                    'tp_count,' \
+                    'fp_count,' \
+                    'fn_count,' \
+                    'multicount,' \
+                ')'
+        try:
+            # NOTE: flatnonzero is already injected
+            get_non_blacklisted = blacklist_capability(gt_cls)
+            vars_to_inject.append(('get_non_blacklisted', get_non_blacklisted))
+            format_dict['base_indices_genexpr'] = \
+                'flatnonzero(get_non_blacklisted(gt_data))'
+        except: # FIXME
+            format_dict['base_indices_genexpr'] = \
+                'range(gt_boxes.shape[0])'
+        processor_code = \
+            'def worker(gt_data, ts_data):\n' \
+            '    gt_boxes = get_gt_bbox(gt_data)\n' \
+            '    ts_boxes = get_ts_bbox(ts_data)\n' \
+            '    indices, scores = find_best_iou(gt_boxes, ts_boxes)\n' \
+            '    indices[scores < {threshold}] = -1\n' \
+            '    tp_indices = empty(gt_boxes.shape[1], order = "C", dtype = "int32")\n' \
+            '    tp_count = fn_count = multicount = 0\n' \
+            '    for idx in {base_indices_genexpr}:\n' \
+            '        ts_match_indices = indices == idx\n' \
+            '        if ts_match_indices.any():\n' \
+            '            iou_scores = scores[ts_match_indices]\n' \
+            '            multicount += (iou_scores.shape[0] - 1)\n' \
+            '            tp_indices[tp_count] = argmax(iou_scores)\n' \
+            '            tp_count += 1\n' \
+            '        else:\n' \
+            '            fn_count += 1\n' \
+            '    {process_fp_indices}\n' \
+            '    {optional_conf_by_idx_setup}\n' \
+            '    return {create_result_object}'
+        wrapped_code = \
+            'def make_worker({var_names}):\n' + \
+            '\n'.join(map(lambda l: '    ' + l, processor_code.split('\n'))) + \
+            '\n    return worker'
+        format_dict['var_names'] = ', '.join(map(itemgetter(0), vars_to_inject))
+        wrapped_code = wrapped_code.format(**format_dict)
+        globs = {}
+        exec(compile(wrapped_code, '', 'exec', optimize = 2), {}, globs)
         return (
-            store_info(tp_idx[:tp_idx_top]), # confidences of true-positives
-            store_info(fp_idx), # confidences of false-positives
-            fn_count, # number of false-negatives
-            multicount, # number of multi-detected objects (bad nms)
+            globs['make_worker'](*map(itemgetter(1), vars_to_inject)),
+            (ResourceTypeInfo(output_class),),
         )

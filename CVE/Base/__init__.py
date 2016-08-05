@@ -3,13 +3,15 @@ __contact__ = 'sergeev917@gmail.com'
 
 __all__ = (
     'IEvaluationDriver',
-    'IVerifier',
     'UnrecognizedAnnotationFormat',
     'ViolatedAnnotationFormat',
     'IDatasetAnnotation',
+    'DetectionSimpleAssessment',
+    'DetectionConfidenceAssessment',
 )
 
 from operator import itemgetter
+from collections import namedtuple
 
 class UnrecognizedAnnotationFormat(Exception):
     def __init__(self, message):
@@ -18,6 +20,18 @@ class UnrecognizedAnnotationFormat(Exception):
 class ViolatedAnnotationFormat(Exception):
     def __init__(self, message):
         Exception.__init__(self, message)
+
+DetectionConfidenceAssessment = \
+    namedtuple(
+        'DetectionConfidenceAssessment',
+        ['tp_confs', 'fp_confs', 'fn_count', 'multicount'],
+    )
+
+DetectionSimpleAssessment = \
+    namedtuple(
+        'DetectionSimpleAssessment',
+        ['tp_count', 'fp_count', 'fn_count', 'multicount'],
+    )
 
 def _raise_not_implemented(obj, function_name):
     derived_class_name = obj.__class__.__qualname__
@@ -47,23 +61,6 @@ class IDatasetAnnotation:
         _raise_not_implemented(self, '__setitem__')
     def __iter__(self):
         _raise_not_implemented(self, '__iter__')
-
-class IVerifier:
-    '''A class for actual verifiers to be inhereted from'''
-    def __init__(self, AnnotationClass):
-        '''Construct a verifier instance with AnnotationClass class.
-
-        AnnotationClass class must be the only argument __init__ has. It is
-        here to configure verifier properly based on the information which
-        will be available in annotation: like bounding-box capatibilities.
-        Note that the __init__ here is simply to provide the interface
-        specification and reasonable error message. It should not be invoked
-        in inherited code. Nevertheless, DependencyFlowNode should be
-        configured.'''
-        _raise_not_implemented(self, '__init__')
-    def __call__(self, base_sample, test_sample):
-        '''Verify two annotations which belong to gt and tested markup'''
-        _raise_not_implemented(self, '__call__')
 
 class IEvaluationDriver:
     '''A class for actual evaluation drivers to be inherited from'''
