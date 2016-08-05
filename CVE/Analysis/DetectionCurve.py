@@ -95,8 +95,8 @@ class FPPIHandler:
 available_handlers = {
     'precision': PrecisionHandler,
     'recall': RecallHandler,
-    'fp': FPCountHandler,
-    'fppi': FPPIHandler,
+    'false-positives': FPCountHandler,
+    'false-positives-per-sample': FPPIHandler,
 }
 
 class DetectionPerformanceCurve:
@@ -229,6 +229,6 @@ class DetectionPerformanceCurve:
             return worker, output_types
         # wrap into logger here
         def log_wrapped_worker(*args, **kwargs):
-            with self._logger.subtask('analysing data to produce PR-curve'):
+            with self._logger.subtask('analysing data to produce a performance curve'):
                 return worker(*args, **kwargs)
         return log_wrapped_worker, output_types
