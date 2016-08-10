@@ -35,13 +35,15 @@ def compose_annotation_class(fields, annotations_bank):
     # filtering applied_handlers to exclude ignored fields: for these fields
     # annotation class set to None
     applied_handlers = [e for e in applied_handlers if e[2] is not None]
+    hnd_indices, hnd_loaders, hnd_classes = zip(*applied_handlers)
     # now we are going to build an annotation class from selected handlers;
     # first, we prepare class-level dictionary which maps named-subannotation
     # to the corresponding index
-    signatures_list = [e[2].storage_signature for e in applied_handlers]
+    signatures_list = [e.storage_signature for e in hnd_classes]
     signatures_dict = dict((e[::-1] for e in enumerate(signatures_list)))
     # the following string will go into class definition as a class variable
     signatures = repr(signatures_dict)
+    del signatures_list, signatures_dict, available_handlers, lookup_buffer
     # next step is to produce class instance init lines
     def idx_pick(indices):
         # note that with one index the input is not a list but just value!
@@ -55,18 +57,37 @@ def compose_annotation_class(fields, annotations_bank):
                 # indices form a range, so we can more easily extract fields
                 return 'v[{0.start}:{0.stop}:{0.step}]'.format(idx_range)
         return '[v[i] for i in [{}]]'.format(','.join(indices))
-    inject_data = [
-        ('cls_list', [e[2] for e in applied_handlers]),
-        ('cnv', [e[1] for e in applied_handlers]),
-    ]
-    format_data = {
-        'signatures': signatures,
-        'tuple_init': 'tuple((cls(cnt) for cls in cls_list))',
-        'distrib_data':
+    inject_data = []
+    format_data = {'signatures': signatures}
+    entries_count = len(applied_handlers)
+    if entries_count < 3:
+        class_names = ['_cls{}'.format(i) for i in range(entries_count)]
+        inject_data += zip(class_names, hnd_classes)
+        format_data['tuple_init'] = '({},)'.format(
+            ','.join(['{}(cnt)'.format(e) for e in class_names])
+        )
+    else:
+        inject_data.append(('cls_list', hnd_classes))
+        if entries_count < 6:
+            tuple_inner = ','.join(
+                ['cls_list[{}](cnt)'.format(i) for i in range(entries_count)],
+            )
+            format_data['tuple_init'] = '({},)'.format(tuple_inner)
+        else:
+            format_data['tuple_init'] = 'tuple([cls(cnt) for cls in cls_list])'
+    if entries_count < 6:
+        loaders_names = ['_cnv{}'.format(i) for i in range(entries_count)]
+        inject_data += zip(loaders_names, hnd_loaders)
+        fmt_line = 'self[{0}].add_record(_cnv{0}({1}))'
+        record_calls = [fmt_line.format(e[0], idx_pick(e[1]))
+                        for e in enumerate(hnd_indices)]
+        format_data['distrib_data'] = '; '.join(record_calls)
+    else:
+        inject_data.append(('cnv', hnd_loaders))
+        format_data['distrib_data'] = \
             'for e in zip(self, cnv, [{}]): e[0].add_record(e[1](e[2]))'.format(
                 ','.join([idx_pick(e[0]) for e in applied_handlers]),
             )
-    }
     class_code = \
         'class ComposedSampleAnnotation(tuple):\n' \
         '    __slots__ = ()\n' \
