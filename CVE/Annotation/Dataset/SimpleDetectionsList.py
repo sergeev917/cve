@@ -100,7 +100,6 @@ class SimpleDetectionsList(IDatasetAnnotation):
         self.storage_class = storage_class
         # setting up actual storage for samples
         self._storage = dict()
-        # FIXME: SHOULD preallocate memory for improved performance
         def access(sample_name):
             if sample_name not in self._storage:
                 self._storage[sample_name] = storage_class(0)

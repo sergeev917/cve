@@ -24,7 +24,10 @@ def bounding_box_capability(AnnotationClass):
     # if we have a bbox markup itself we should not convert anything to bbox
     bboxes_idx = AnnotationClass.signatures.get('numpy_bounding_boxes', None)
     if bboxes_idx is not None:
-        return lambda markup: markup[bboxes_idx].value
+        def bbox_getter(markup):
+            obj = markup[bboxes_idx]
+            return obj.value[:, : obj.top]
+        return bbox_getter
     # it is all formats we support right now
     raise Exception('Bounding-box capability is missing in the annotation') # FIXME
 
@@ -35,7 +38,10 @@ def confidence_capability(AnnotationClass):
     a predefined format.'''
     confs_idx = AnnotationClass.signatures.get('numpy_confidences', None)
     if confs_idx is not None:
-        return lambda markup: markup[confs_idx].value
+        def conf_getter(markup):
+            obj = markup[confs_idx]
+            return obj.value[: obj.top]
+        return conf_getter
     raise Exception('Confidence capability is missing in the annotation') # FIXME
 
 def whitelist_capability(AnnotationClass):
@@ -53,5 +59,8 @@ def whitelist_capability(AnnotationClass):
     #       implemented.
     whitelst_idx = AnnotationClass.signatures.get('numpy_whitelist', None)
     if whitelst_idx is not None:
-        return lambda markup: markup[whitelst_idx].value
+        def whlst_getter(markup):
+            obj = markup[whitelst_idx]
+            return obj.value[: obj.top]
+        return conf_getter
     raise Exception('Whitelist capability is missing in the annotation') # FIXME

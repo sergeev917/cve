@@ -10,6 +10,7 @@ from ..Sample import compose_annotation_class
 from ..Util import (
     parse_format_header,
     get_global_registry,
+    count_lines,
 )
 from ...Base import (
     UnrecognizedAnnotationFormat,
@@ -59,6 +60,7 @@ class DollarAnnotation(IDatasetAnnotation):
                 directories_found = True
                 continue
             # have a regular file here (or a symlink)
+            markup_lines_count = count_lines(elem.path) - 1
             markup_file = open(elem.path, 'r')
             line = markup_file.readline().strip()
             if not line.startswith(format_version_line):
@@ -105,7 +107,7 @@ class DollarAnnotation(IDatasetAnnotation):
                     'Dollar format prohibits subdirectories'
                 )
             # now, version is fixed, reading annotation lines
-            markup_obj = self.storage_class(0)
+            markup_obj = self.storage_class(markup_lines_count)
             for line in markup_file:
                 markup_obj.add_record(
                     [e.strip() for e in line.split()],
