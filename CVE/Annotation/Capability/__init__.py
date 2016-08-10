@@ -62,5 +62,5 @@ def whitelist_capability(AnnotationClass):
         def whlst_getter(markup):
             obj = markup[whitelst_idx]
             return obj.value[: obj.top]
-        return conf_getter
+        return whlst_getter
     raise Exception('Whitelist capability is missing in the annotation') # FIXME
