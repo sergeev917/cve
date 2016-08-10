@@ -1,20 +1,8 @@
 __all__ = (
     'bounding_box_capability',
     'confidence_capability',
-    'blacklist_capability',
+    'whitelist_capability',
 )
-
-def get_slots(AnnotationClass):
-    # proxy-classes should be processed separately
-    try:
-        return AnnotationClass.__proxied_slots__
-    except AttributeError:
-        pass
-    # with no proxy only slotted classes are supported
-    try:
-        return AnnotationClass.__slots__
-    except AttributeError:
-        raise Exception('Annotation classes without slots are not supported') from None# FIXME
 
 def bounding_box_capability(AnnotationClass):
     '''Returns a function which produces bounding box in a predefined format.
@@ -33,12 +21,11 @@ def bounding_box_capability(AnnotationClass):
     # checking for an explicit capability implementation
     if hasattr(AnnotationClass, 'bounding_box_capability'):
         return lambda markup: markup.bounding_box_capability()
-    slots = get_slots(AnnotationClass)
-    # checking in the order of preference:
     # if we have a bbox markup itself we should not convert anything to bbox
-    if 'numpy_bounding_boxes' in slots:
-        return lambda markup: markup.numpy_bounding_boxes.value
-    # it is all formats which are supported for now
+    bboxes_idx = AnnotationClass.signatures.get('numpy_bounding_boxes', None)
+    if bboxes_idx is not None:
+        return lambda markup: markup[bboxes_idx].value
+    # it is all formats we support right now
     raise Exception('Bounding-box capability is missing in the annotation') # FIXME
 
 def confidence_capability(AnnotationClass):
@@ -46,13 +33,13 @@ def confidence_capability(AnnotationClass):
 
     This function provides a unified way to obtain confidence value in
     a predefined format.'''
-    slots = get_slots(AnnotationClass)
-    if 'numpy_confidences' in slots:
-        return lambda markup: markup.numpy_confidences.value
+    confs_idx = AnnotationClass.signatures.get('numpy_confidences', None)
+    if confs_idx is not None:
+        return lambda markup: markup[confs_idx].value
     raise Exception('Confidence capability is missing in the annotation') # FIXME
 
-def blacklist_capability(AnnotationClass):
-    '''Returns a function which indicates whether a sample should be ignored.
+def whitelist_capability(AnnotationClass):
+    '''Returns a function which shows whether a sample should not be ignored.
 
     The ignored samples should not be just thrown away. On a training/fitting
     stage it is correct behavior not to use those samples, but additionally
@@ -64,7 +51,7 @@ def blacklist_capability(AnnotationClass):
     #       with correct shape: (samples,). We can't know the samples count
     #       from here, thus simulation of always-false responses is not
     #       implemented.
-    slots = get_slots(AnnotationClass)
-    if 'numpy_blacklist' in slots:
-        return lambda markup: markup.numpy_blacklist.value
-    raise Exception('Blacklist capability is missing in the annotation') # FIXME
+    whitelst_idx = AnnotationClass.signatures.get('numpy_whitelist', None)
+    if whitelst_idx is not None:
+        return lambda markup: markup[whitelst_idx].value
+    raise Exception('Whitelist capability is missing in the annotation') # FIXME

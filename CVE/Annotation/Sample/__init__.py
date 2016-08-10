@@ -1,14 +1,25 @@
-from .MutableAnnotation import generate_sample_annotation_class
-from .Ignore import IgnoreAdapter
+__all__ = (
+    'BoundingBoxSampleAnnotation',
+    'WhitelistSampleAnnotation',
+    'ConfidenceSampleAnnotation',
+    'BoundingBoxLoader',
+    'IgnoreLoader',
+    'WhitelistLoader',
+    'ConfidenceLoader',
+    'compose_annotation_class',
+)
+
 from .BoundingBox import (
     BoundingBoxSampleAnnotation,
-    BoundingBoxFieldAdapter,
+    BoundingBoxLoader,
+)
+from .Whitelist import (
+    WhitelistSampleAnnotation,
+    WhitelistLoader,
 )
 from .Confidence import (
     ConfidenceSampleAnnotation,
-    ConfidenceFieldAdapter,
+    ConfidenceLoader,
 )
-from .Blacklist import (
-    BlacklistSampleAnnotation,
-    BlacklistFieldAdapter,
-)
+from .Ignore import IgnoreLoader
+from .MutableAnnotation import compose_annotation_class

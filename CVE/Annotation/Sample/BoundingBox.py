@@ -1,13 +1,19 @@
 __all__ = (
     'BoundingBoxSampleAnnotation',
-    'BoundingBoxFieldAdapter',
+    'BoundingBoxLoader',
 )
 
 from operator import itemgetter
 from numpy import (
+    int32,
     ndarray,
+    array,
     hstack,
     column_stack,
+)
+from ...Base import (
+    NonApplicableLoader,
+    LoaderMissingData,
 )
 
 class BoundingBoxSampleAnnotation:
@@ -17,76 +23,68 @@ class BoundingBoxSampleAnnotation:
        min on one feature channel (for instance, x_min or y_max), not one
        bounding box. So note that the data is stored row-wise, a bounding box
        is a column in the matrix.'''
-    __slots__ = ('value',)
-    signature_name = 'numpy_bounding_boxes'
-
-    def __init__(self):
+    __slots__ = ('value', 'top')
+    storage_signature = 'numpy_bounding_boxes'
+    def __init__(self, prealloc_obj = 0):
         '''Initializes empty annotation, i.e. with no bounding boxes stored.'''
-        self.value = ndarray((4, 0), dtype = 'int32', order = 'C')
+        self.value = ndarray((4, prealloc_obj), dtype = 'int32', order = 'C')
+        self.top = 0
+    def add_record(self, values):
+        if self.top < self.value.shape[1]:
+            self.value[:, self.top] = values
+        else:
+            self.value = hstack((self.value, column_stack((values,))))
+        self.top += 1
 
-    # NOTE: if the following function is changed then format parsing function
-    # in the BoundingBoxFieldAdapter class should be corrected accordingly
-    # (whether order of fields or meaning was altered).
-    def push(self, x_min, y_min, x_max, y_max):
-        # FIXME: column_stack here is inefficient!
-        new_bbox_column = column_stack(([x_min, y_min, x_max, y_max],))
-        self.value = hstack((self.value, new_bbox_column))
-
-class BoundingBoxFieldAdapter:
-    storage_class = BoundingBoxSampleAnnotation
-    handled_fields  = ('bbox_x_min', 'bbox_x_max', 'bbox_y_min', 'bbox_y_max',
-                       'bbox_x', 'bbox_y', 'bbox_w', 'bbox_h')
-
-    def create_annotation(self):
-        return self.__class__.storage_class()
-
-    def __init__(self, field_names):
-        # selecting options which are related to bounding boxes
-        bbox_options = set(filter(lambda s: s.startswith('bbox_'), field_names))
-        if len(bbox_options) == 0:
-            raise Exception() # FIXME
-        # will choose the following function based on format (field names set):
-        # target bbox format is x/y points (no width/height), so postproc_func
-        # will be set for width-and-height format to summ up width/height with
-        # the segments start points (for another format postproc_func will
-        # remain to be None as no additional actions are required).
-        pickup_func = None
-        postproc_func = None
-        format_is_supported = False
-        # checking for x-min/max, y-min/max format of bbox
-        required = ('bbox_x_min', 'bbox_y_min', 'bbox_x_max', 'bbox_y_max')
-        present_options = set(required) & bbox_options
-        if len(present_options) == len(required):
-            # preparing a function that will pick required fields
-            indices = map(field_names.index, required)
-            pickup_func = itemgetter(*list(indices))
-            format_is_supported = True
-        elif len(present_options) != 0:
-            raise Exception() # FIXME
-        # checking for x, y, w, h format of bbox if no format found so far
-        if not format_is_supported:
-            required = ('bbox_x', 'bbox_y', 'bbox_w', 'bbox_h')
-            present_options = set(required) & bbox_options
-            if len(present_options) == len(required):
-                # preparing a function that will pick required fields
-                indices = map(field_names.index, required)
-                pickup_func = itemgetter(*tuple(indices))
-                def postproc_func(integer_bboxes):
-                    integer_bboxes[2] += integer_bboxes[0]
-                    integer_bboxes[3] += integer_bboxes[1]
-                format_is_supported = True
-            elif len(present_options) != 0:
-                raise Exception() # FIXME
-        # checking whether a supported format was found
-        if not format_is_supported:
-            raise Exception() # FIXME
-        # constructing a function which will append annotation
-        # in the choosen format (from fields string-values)
-        def append_annotation(annotation_object, *field_values):
-            nonlocal pickup_func, postproc_func
-            integer_bboxes = list(map(int, pickup_func(field_values)))
-            # FIXME: check performance with the do-nothing lambda
-            if postproc_func != None:
-                postproc_func(integer_bboxes)
-            annotation_object.push(*integer_bboxes)
-        self.append_annotation = append_annotation
+class BoundingBoxLoader:
+    annotation_class = BoundingBoxSampleAnnotation
+    def setup_from_fields(self, field_names):
+        en_names = enumerate(field_names)
+        targets = dict([e[::-1] for e in en_names if e[1].startswith('bbox_')])
+        if len(targets) == 0:
+            raise NonApplicableLoader()
+        all_cooords_error = None
+        try:
+            # trying to apply all-coordinates mode
+            return self._setup_from_all_coords(targets)
+        except (NonApplicableLoader, LoaderMissingData) as err:
+            all_cooords_error = err
+        # all-coordinates mode is failed at this point
+        pin_and_size_error = None
+        try:
+            # trying to apply pin/size mode
+            return self._setup_from_pin_and_size(targets)
+        except (NonApplicableLoader, LoaderMissingData) as err:
+            pin_and_size_error = err
+        # both modes have failed at this point, we are going to provide
+        # error description which include information about both problems
+        raise RuntimeError('FIXME: both bbox loader modes have failed')
+    def _setup_from_all_coords(self, targets_dict):
+        all_coords = ('bbox_x_min', 'bbox_y_min', 'bbox_x_max', 'bbox_y_max')
+        present_fields = set(all_coords) & targets_dict.keys()
+        if len(present_fields) == 0:
+            raise NonApplicableLoader()
+        if len(present_fields) < len(all_coords):
+            raise LoaderMissingData()
+        def adapter(fields):
+            return [int(e) for e in fields]
+        # pick indices we use in a fixed order, return adapter function
+        indices = [targets_dict[e] for e in all_coords]
+        return indices, adapter
+    def _setup_from_pin_and_size(self, targets_dict):
+        pin_and_size = ('bbox_x', 'bbox_y', 'bbox_w', 'bbox_h')
+        present_fields = set(pin_and_size) & targets_dict.keys()
+        if len(present_fields) == 0:
+            raise NonApplicableLoader()
+        if len(present_fields) < len(pin_and_size):
+            raise LoaderMissingData()
+        # pick needed indices we are going to process
+        indices = [targets_dict[e] for e in pin_and_size]
+        # for this format we need to do a little conversation (from side sizes
+        # to coordinates of the other point)
+        def adapter(fields):
+            fields = [int32(e) for e in fields]
+            fields[2] += fields[0]
+            fields[3] += fields[1]
+            return fields
+        return indices, adapter

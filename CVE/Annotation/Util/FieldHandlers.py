@@ -1,30 +1,17 @@
 __all__ = ('get_global_registry',)
-
 from copy import deepcopy
 
-registry = dict()
+from ..Sample.BoundingBox import BoundingBoxLoader
+from ..Sample.Confidence import ConfidenceLoader
+from ..Sample.Ignore import IgnoreLoader
+from ..Sample.Whitelist import WhitelistLoader
 
-def register_handler(field_name, handler_class):
-    global registry
-    if field_name in registry:
-        raise Exception() # FIXME
-    registry[field_name] = handler_class
-
-# NOTE: use default value as for "ignore" as a feature for dataset init
-def get_global_registry():
-    return deepcopy(registry)
-
-# registering all implemented handlers
-from ..Sample.BoundingBox import BoundingBoxFieldAdapter
-from ..Sample.Confidence import ConfidenceFieldAdapter
-from ..Sample.Ignore import IgnoreAdapter
-from ..Sample.Blacklist import BlacklistFieldAdapter
-adapters = (
-    BoundingBoxFieldAdapter,
-    ConfidenceFieldAdapter,
-    IgnoreAdapter,
-    BlacklistFieldAdapter,
+_registry = (
+    BoundingBoxLoader(),
+    ConfidenceLoader(),
+    IgnoreLoader(),
+    WhitelistLoader(),
 )
-for adapter_class in adapters:
-    for field_name in adapter_class.handled_fields:
-        register_handler(field_name, adapter_class)
+
+def get_global_registry():
+    return deepcopy(_registry)

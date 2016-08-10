@@ -6,7 +6,7 @@ from os.path import isdir, exists, splitext
 from os import scandir
 from itertools import chain
 from operator import itemgetter
-from ..Sample import generate_sample_annotation_class
+from ..Sample import compose_annotation_class
 from ..Util import (
     parse_format_header,
     get_global_registry,
@@ -87,7 +87,7 @@ class DollarAnnotation(IDatasetAnnotation):
                     'ignore', # visible bbox_y
                     'ignore', # visible bbox_w
                     'ignore', # visible bbox_h
-                    'blacklist_01',
+                    'whitelist_01',
                     'ignore', # angle
                 )
                 fields_for_version = {'0': 10, '1': 10, '2': 11, '3': 12}
@@ -97,16 +97,7 @@ class DollarAnnotation(IDatasetAnnotation):
                     )
                 fields = handlers_names[:fields_for_version[used_version]]
                 store = kwargs.get('adapter_store', get_global_registry())
-                try:
-                    adapters = set(map(lambda f: store[f], fields))
-                except KeyError as error:
-                    msg = 'Don\'t know how to process "{}" field'.format(error)
-                    raise RuntimeError(msg) from None
-                # building adapters from our field list (order of fields)
-                adapters = tuple(map(lambda cls: cls(fields), adapters))
-                # building storage-class with all declared annotations:
-                # sub-annotation will be an attribute with predefined name
-                self.storage_class = generate_sample_annotation_class(adapters)
+                self.storage_class = compose_annotation_class(fields, store)
             if directories_found:
                 # dollar format is confirmed to be used here and directories
                 # are not allowed (since we won't do a recursive scan)
@@ -114,17 +105,17 @@ class DollarAnnotation(IDatasetAnnotation):
                     'Dollar format prohibits subdirectories'
                 )
             # now, version is fixed, reading annotation lines
-            # FIXME: SHOULD preallocate memory for improved performance
-            markup_obj = self.storage_class()
+            markup_obj = self.storage_class(0)
             for line in markup_file:
-                field_values = tuple(map(str.strip, line.split()))
-                markup_obj.push_all(*field_values)
+                markup_obj.add_record(
+                    [e.strip() for e in line.split()],
+                )
             markup_file.close()
             # assigning name of the sample to be put into the storage
             sample_name = splitext(elem.name)[0]
             self._storage[sample_name] = markup_obj
             # notifying the progress bar to tick forward (if any)
-            tick() if tick else None
+            tick and tick()
     def __iter__(self):
         # items() returns dictionary view, which could be iterated over
         return self._storage.items().__iter__()

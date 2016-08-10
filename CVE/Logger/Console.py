@@ -132,7 +132,7 @@ class SingleSubtask:
             return
         # failure case
         if self._need_status_label:
-            self._lineman.append(wrap_color(3, 'fail'), 4, newline = True)
+            self._lineman.append(wrap_color(3, ' [!]'), 4, newline = True)
         self.fail('{}: {}'.format(exc_type.__name__, exc_value))
         raise
     def subtask(self, descline, **kwargs):
@@ -185,7 +185,7 @@ class SpinnerSubtask:
             if self._use_timer:
                 self._lineman.append(*color_time, newline = True)
             return
-        self._push_label(wrap_color(3, 'fail'))
+        self._push_label(wrap_color(3, ' [!]'))
         self._lineman.append('', newline = True)
         self.fail('{}: {}'.format(exc_type.__name__, exc_value))
         raise

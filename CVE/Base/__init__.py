@@ -8,6 +8,7 @@ __all__ = (
     'IDatasetAnnotation',
     'DetectionSimpleAssessment',
     'DetectionConfidenceAssessment',
+    'exec_with_injection',
 )
 
 from operator import itemgetter
@@ -21,6 +22,12 @@ class ViolatedAnnotationFormat(Exception):
     def __init__(self, message):
         Exception.__init__(self, message)
 
+class NonApplicableLoader(Exception):
+    pass
+
+class LoaderMissingData(Exception):
+    pass
+
 DetectionConfidenceAssessment = \
     namedtuple(
         'DetectionConfidenceAssessment',
@@ -32,6 +39,16 @@ DetectionSimpleAssessment = \
         'DetectionSimpleAssessment',
         ['tp_count', 'fp_count', 'fn_count', 'multicount'],
     )
+
+def exec_with_injection(code, return_line, inject_vars):
+    wrapped_code = 'def _wrapped({}):\n{}\n    return {}'.format(
+        ','.join([e[0] for e in inject_vars]),
+        '\n'.join(map(lambda l: '    ' + l, code.split('\n'))),
+        return_line,
+    )
+    globs = {}
+    exec(compile(wrapped_code, '', 'exec', optimize = 2), {}, globs)
+    return globs['_wrapped'](*(e[1] for e in inject_vars))
 
 def _raise_not_implemented(obj, function_name):
     derived_class_name = obj.__class__.__qualname__

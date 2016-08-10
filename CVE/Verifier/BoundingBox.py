@@ -4,7 +4,7 @@ from .BoundingBoxCmp import find_best_iou
 from ..Annotation.Capability import (
     bounding_box_capability,
     confidence_capability,
-    blacklist_capability,
+    whitelist_capability,
 )
 from numpy import (
     finfo,
@@ -96,10 +96,10 @@ class BoundingBoxIoUVerifier:
                 ')'
         try:
             # NOTE: flatnonzero is already injected
-            get_non_blacklisted = blacklist_capability(gt_cls)
-            vars_to_inject.append(('get_non_blacklisted', get_non_blacklisted))
+            get_whitelist = whitelist_capability(gt_cls)
+            vars_to_inject.append(('get_whitelist', get_whitelist))
             format_dict['base_indices_genexpr'] = \
-                'flatnonzero(get_non_blacklisted(gt_data))'
+                'flatnonzero(get_whitelist(gt_data))'
         except: # FIXME
             format_dict['base_indices_genexpr'] = \
                 'range(gt_boxes.shape[0])'

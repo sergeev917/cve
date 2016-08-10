@@ -5,7 +5,7 @@ __all__ = ('SimpleDetectionsList',)
 from os.path import isfile, exists, basename, splitext
 from itertools import chain
 from operator import itemgetter
-from ..Sample import generate_sample_annotation_class
+from ..Sample import compose_annotation_class
 from ...Logger import get_default_logger
 from ..Util import (
     parse_format_header,
@@ -96,23 +96,14 @@ class SimpleDetectionsList(IDatasetAnnotation):
                 return splitext(basename(get_name_field(fields)))[0]
         # getting a storage to get adapter classes from (using field names)
         adapter_store = kwargs.get('adapter_store', get_global_registry())
-        try:
-            adapters = set(map(lambda f: adapter_store[f], fields))
-        except KeyError as error:
-            msg = 'Don\'t know how to process "{}" field'.format(error)
-            raise RuntimeError(msg) from None
-        # building adapters from our field list (order of fields, specifically)
-        adapters = tuple(map(lambda cls: cls(fields), adapters))
-        # building storage-class which will contain all declared annotations
-        # as attributes with predefined names
-        self.storage_class = generate_sample_annotation_class(adapters)
-        storage_class = self.storage_class
+        storage_class = compose_annotation_class(fields, adapter_store)
+        self.storage_class = storage_class
         # setting up actual storage for samples
         self._storage = dict()
         # FIXME: SHOULD preallocate memory for improved performance
         def access(sample_name):
             if sample_name not in self._storage:
-                self._storage[sample_name] = storage_class()
+                self._storage[sample_name] = storage_class(0)
             return self._storage[sample_name]
         # because it is highly possible that several lines of the data will be
         # about the same sample (multiple detections on a single image/sample)
@@ -120,12 +111,12 @@ class SimpleDetectionsList(IDatasetAnnotation):
         buffered_sample_annotation = (None, None)
         # reading detections, one detections per line
         for line in chain(pending_line, markup_file):
-            field_values = tuple(map(str.strip, line.split(separator)))
+            field_values = [e.strip() for e in line.split(separator)]
             sample_name = get_sample_name(field_values)
             if sample_name != buffered_sample_annotation[0]:
                 buffered_sample_annotation = (sample_name, access(sample_name))
-            buffered_sample_annotation[1].push_all(*field_values)
-            tick() if tick else None # tick for the current line
+            buffered_sample_annotation[1].add_record(field_values)
+            tick and tick() # tick for the current line
     def __iter__(self):
         # items() returns dictionary view, which could be iterated over
         return self._storage.items().__iter__()
@@ -135,7 +126,7 @@ class SimpleDetectionsList(IDatasetAnnotation):
         #       so any unseen sample name will produce empty annotation here
         annotation = self._storage.get(sample_name, None)
         if annotation == None:
-            return self.storage_class()
+            return self.storage_class(0)
         return annotation
     def __len__(self):
         return self._storage.__len__()
