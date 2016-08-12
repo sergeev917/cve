@@ -61,13 +61,12 @@ class RecallHandler:
     def __init__(self, assessment_list):
         # calculating gt objects count (since it is constant)
         # assessment_list: (tp_confs, fp_confs, fn_count, multicount)
-        get_gt_count = lambda e: e[0].shape[0] + e[2]
-        self.inverted_gt_count = 1. / sum(map(get_gt_count, assessment_list))
+        self.gt_count = sum([e[0].shape[0] + e[2] for e in assessment_list])
         self.tp_count = 0
     def point(self, tp_flags_interval):
         self.tp_count += tp_flags_interval.sum()
         # calculating: TP / (TP + FN), (TP + FN) is the gt set size
-        return self.tp_count * self.inverted_gt_count
+        return self.tp_count / self.gt_count
 
 class FPCountHandler:
     entity = 'false-positives'
@@ -82,13 +81,13 @@ class FPPIHandler:
     entity = 'false-positives-per-sample'
     def __init__(self, assessment_list):
         # calculating samples count (not gt markup count)
-        self.inverted_samples_count = 1. / len(assessment_list)
+        self.samples_count = len(assessment_list)
         self.fp_count = 0
     def point(self, tp_flags_interval):
         # false positives count is the count of 0 in interval (0/1 are allowed)
         self.fp_count += (tp_flags_interval.shape[0] - tp_flags_interval.sum())
         # calculating: FP / (samples count)
-        return self.fp_count * self.inverted_samples_count
+        return self.fp_count / self.samples_count
 
 # FIXME: we can use flow builder to avoid multiple calculation of the same data
 
@@ -192,7 +191,7 @@ class DetectionPerformanceCurve:
             # thresholding confidence level from the highest one
             # NOTE: indices on the following line are corresponding to the points
             #       where there is a gap compare to the next value
-            target_indices = nonzero(logical_not(isclose(diff(confidences), 0)))[0] # FIXME: configurable
+            target_indices = nonzero(logical_not(isclose(0, diff(confidences))))[0] # FIXME: configurable
             # adding fictive first point to produce correct range and the last point
             # NOTE: +1 is to use non-inclusive index of a range end
             target_indices = concatenate(([-1], target_indices, [points_count])) + 1
