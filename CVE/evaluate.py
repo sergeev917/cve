@@ -35,13 +35,13 @@ def evaluate(*args, **kwargs):
             pass
     # build all targets: user-given and implicitly injected (side-effects, etc)
     effective_targets = injected_targets + (user_targets or [])
-    func_and_types_options = flow.construct(effective_targets)
-    if len(func_and_types_options) == 0:
+    templates_and_types = flow.construct(effective_targets)
+    if len(templates_and_types) == 0:
         raise RuntimeError('resource graph construction has failed')
-    elif len(func_and_types_options) > 1:
+    elif len(templates_and_types) > 1:
         raise RuntimeError('ambiguous resource graph configuration')
     # selecting the first (and only) option, selecting function and call it
-    outdata = func_and_types_options[0][0]()
+    outdata = templates_and_types[0][0].assemble()()
     # removing service names from output (or applying user-defined filter)
     results = [x for x in zip(effective_targets, outdata) if not efilter(x[0])]
     return dict(results)

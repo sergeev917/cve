@@ -40,11 +40,11 @@ DetectionSimpleAssessment = \
         ['tp_count', 'fp_count', 'fn_count', 'multicount'],
     )
 
-def exec_with_injection(code, return_line, inject_vars):
+def exec_with_injection(code, return_names, inject_vars):
     wrapped_code = 'def _wrapped({}):\n{}\n    return {}'.format(
         ','.join([e[0] for e in inject_vars]),
         '\n'.join(map(lambda l: '    ' + l, code.split('\n'))),
-        return_line,
+        return_names,
     )
     globs = {}
     exec(compile(wrapped_code, '', 'exec', optimize = 2), {}, globs)

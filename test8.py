@@ -13,8 +13,8 @@ set_default_logger(ConsoleLog(timer = True))
 print(evaluate(
     asGtDataset(DollarAnnotation('/home/sergeev/bigsample-workload/gt')),
     asEvalDataset(SimpleDetectionsList('/home/sergeev/bigsample-workload/detections-min0.05.txt')),
-    BoundingBoxIoUVerifier(),
-    SimpleWalker(),
+    BoundingBoxIoUVerifier(0.5),
+    SimpleWalker(workers = None),
     DetectionPerformanceCurve(mode = ('precision', 'recall')),
     CurvePlotter2D('/tmp/imgout.png', label = 'BigSample test', lang = 'ru'),
 ))

@@ -1,4 +1,4 @@
-# NOTE: PYTHONHASHSEED=0 is usefull for reproducible debugging
+# NOTE: PYTHONHASHSEED=0 is useful for reproducible debugging
 
 __all__ = (
     'PureStaticNode',
@@ -24,6 +24,7 @@ from numpy import (
     nonzero,
     pad,
 )
+from ..Base import exec_with_injection
 
 class ResourceTypeInfo:
     __slots__ = ('type_cls', 'aux_info')
@@ -560,19 +561,10 @@ class _RegistersAllocator:
     def max_allocated_rooms(self):
         return self._top_index + 1
 
-class _ChainerStorage:
-    __slots__ = ('_data', '_type')
+class _ChainStorage:
+    __slots__ = ('_data',)
     def __init__(self, room_count):
         self._data = [None] * room_count
-        self._type = [None] * room_count
-    def get_type_info(self, indices):
-        return [self._type[i] for i in indices]
-    def update_type_info(self, types_and_indices):
-        for index, new_type_info in types_and_indices:
-            if index is not None:
-                self._type[index] = new_type_info
-    def discard_type_info(self):
-        self._type = None
     def reset_data(self):
         # note that we can't drop the list instance itself since
         # we made closures on it inside wrapper functions;
@@ -583,25 +575,46 @@ class _ChainerStorage:
             return list(self._data)
         return [self._data[i] for i in indices]
     def wrap_function(self, func, input_indices, output_indices):
-        data_fmt = lambda i: 'd[{}]'.format(i)
         data_fmt_chk = lambda i: 'd[{}]'.format(i) if i is not None else '__'
-        kwargs = {
-            'ins': ','.join(map(data_fmt, input_indices)),
-            'outs': ','.join(map(data_fmt_chk, output_indices)),
-        }
-        code = 'def make_wrapper(d, f):\n' \
-               '    def wrapper_function():\n' \
-               '        {outs} = f({ins})\n' \
-               '    return wrapper_function'
-        code = code.format(**kwargs)
-        globs = {}
-        exec(compile(code, '', 'exec', optimize = 2), {}, globs)
-        return globs['make_wrapper'](self._data, func)
+        code = 'def ff(): {outs} = f({ins})'.format(
+            outs = ','.join([data_fmt_chk(i) for i in output_indices]),
+            ins = ','.join(['d[{}]'.format(i) for i in input_indices]),
+        )
+        return exec_with_injection(code, 'ff', [('f', func), ('d', self._data)])
     def wrap_deleter(self, index):
         d, i = self._data, index
         def deleter():
             d[i] = None
         return deleter
+
+class _ChainTemplate:
+    def __init__(self, rooms, targets):
+        self._types = [None] * rooms
+        self._rooms = rooms
+        self._targets = targets
+        self._gears = []
+    def get_type_info(self, indices):
+        return [self._types[i] for i in indices]
+    def update_type_info(self, types_and_indices):
+        for index, new_type_info in types_and_indices:
+            if index is not None:
+                self._types[index] = new_type_info
+    def drop_type_info(self):
+        self._types = None
+    def add_chainer_call(self, chainer_member, *args, **kwargs):
+        self._gears.append((chainer_member, args, kwargs))
+    def assemble(self):
+        chainer = _ChainStorage(self._rooms)
+        invokation_list = []
+        for chainer_func, args, kwargs in self._gears:
+            invokation_list.append(chainer_func(chainer, *args, **kwargs))
+        def _execute_chain():
+            for do_step in invokation_list:
+                do_step()
+            data = chainer.get_data(self._targets)
+            chainer.reset_data()
+            return data
+        return _execute_chain
 
 class FlowBuilder:
     def __init__(self):
@@ -863,15 +876,17 @@ class FlowBuilder:
             targets_list,
             self._build_contracts_lookup(),
         )
-        acceptable_workers = []
+        results_list = []
         for config in configuration_sets:
-            invoke_list = []
             actions, rooms, targets = self._build_actions(*config, targets_list)
-            chainer = _ChainerStorage(rooms)
+            chainer_template = _ChainTemplate(rooms, targets)
             for prov_inf, in_ids, out_ids in actions:
                 if prov_inf is None:
                     # note that out_ids in this case is actually just an index
-                    invoke_list.append(chainer.wrap_deleter(out_ids))
+                    chainer_template.add_chainer_call(
+                        _ChainStorage.wrap_deleter,
+                        out_ids,
+                    )
                 else:
                     prov_idx, prov_mode = prov_inf
                     nodeobj = self._nodeobjs[prov_idx]
@@ -879,26 +894,22 @@ class FlowBuilder:
                     try:
                         worker, types = nodeobj.setup(
                             prov_mode,
-                            chainer.get_type_info(in_ids),
+                            chainer_template.get_type_info(in_ids),
                             outmask,
                         )
                     except RuntimeError: # FIXME: change RuntimeError
-                        # we are dropping the currently processing option list
-                        # and switching to the next option since this one
-                        # have a type conflict in it
-                        invoke_list = None
+                        # type conflicts in setup
+                        chainer_template = None
                         break
-                    chainer.update_type_info(zip(out_ids, types))
-                    worker = chainer.wrap_function(worker, in_ids, out_ids)
-                    invoke_list.append(worker)
-            if invoke_list is not None:
-                output_type_info = tuple(chainer.get_type_info(targets))
-                chainer.discard_type_info()
-                def execute():
-                    for do_step in invoke_list:
-                        do_step()
-                    data = chainer.get_data(targets)
-                    chainer.reset_data()
-                    return data
-                acceptable_workers.append((execute, output_type_info))
-        return acceptable_workers
+                    chainer_template.update_type_info(zip(out_ids, types))
+                    chainer_template.add_chainer_call(
+                        _ChainStorage.wrap_function,
+                        worker,
+                        in_ids,
+                        out_ids,
+                    )
+            if chainer_template is not None:
+                out_type_info = tuple(chainer_template.get_type_info(targets))
+                chainer_template.drop_type_info()
+                results_list.append((chainer_template, out_type_info))
+        return results_list
