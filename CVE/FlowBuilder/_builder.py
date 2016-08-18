@@ -581,17 +581,34 @@ class _ChainStorage:
             ins = ','.join(['d[{}]'.format(i) for i in input_indices]),
         )
         return exec_with_injection(code, 'ff', [('f', func), ('d', self._data)])
+    def wrap_assignment(self, room_indices):
+        data_fmt_chk = lambda i: 'd[{}]'.format(i) if i is not None else '__'
+        code = 'def f(v): {dst} = v'.format(
+            dst = ','.join([data_fmt_chk(i) for i in room_indices]),
+        )
+        # if the input tuple has length of 1, then we need to avoid introducing
+        # additional tuple enclosure; the following addition will extract the
+        # single element from tuple
+        if len(room_indices) == 1:
+            code += '[0]'
+        return exec_with_injection(code, 'f', [('d', self._data)])
     def wrap_deleter(self, index):
         d, i = self._data, index
         def deleter():
             d[i] = None
         return deleter
 
-class _ChainTemplate:
+# FIXME: we could try to avoid storing wrapper functions at all if we opt to
+#        compiling the entire do_all function (generate its source code);
+#        thus, we can avoid doing intermediate store for simple cases where
+#        a resource has only single user.
+
+class _ChainBlueprint:
     def __init__(self, rooms, targets):
         self._types = [None] * rooms
         self._rooms = rooms
         self._targets = targets
+        self._input_proc = None
         self._gears = []
     def get_type_info(self, indices):
         return [self._types[i] for i in indices]
@@ -603,13 +620,21 @@ class _ChainTemplate:
         self._types = None
     def add_chainer_call(self, chainer_member, *args, **kwargs):
         self._gears.append((chainer_member, args, kwargs))
+    def add_runtime_input_proc(self, input_proc_gen, *args, **kwargs):
+        self._input_proc = (input_proc_gen, args, kwargs)
     def assemble(self):
         chainer = _ChainStorage(self._rooms)
-        invokation_list = []
-        for chainer_func, args, kwargs in self._gears:
-            invokation_list.append(chainer_func(chainer, *args, **kwargs))
-        def _execute_chain():
-            for do_step in invokation_list:
+        input_proc_func = None
+        data_proc_list= []
+        if self._input_proc is not None:
+            input_proc_gen, args, kwargs = self._input_proc
+            input_proc_func = input_proc_gen(chainer, *args, **kwargs)
+        for proc_gen, args, kwargs in self._gears:
+            data_proc_list.append(proc_gen(chainer, *args, **kwargs))
+        def _execute_chain(*runtime_input_values):
+            # execute runtime input insertion if it's configured
+            input_proc_func and input_proc_func(runtime_input_values)
+            for do_step in data_proc_list:
                 do_step()
             data = chainer.get_data(self._targets)
             chainer.reset_data()
@@ -780,15 +805,15 @@ class FlowBuilder:
                 contract = self._nodeobjs[prov_id].get_contract(mode_id)
                 # matching require-part of the contract with dependencies ids
                 deps_ids = _extract_resources(_lookup_deps(curr_prov_id))
-                input_ids = map(deps_ids.__getitem__, contract[0])
+                input_ids = map(deps_ids.__getitem__, contract[0]) # FIXME
                 # these are ids of the objects we need on our input; now we
                 # need to map them into registry indices
-                input_regs = tuple(map(reg_alloc_ids.__getitem__, input_ids))
+                input_regs = tuple(map(reg_alloc_ids.__getitem__, input_ids)) # FIXME
                 # output registers are unknown at this point, since they will
                 # be allocated only on the next step (since output resources
                 # ids are dependent on the provider id)
                 res_out_ids = _extract_resources(_lookup_users(curr_prov_id))
-                output_ids = tuple(map(res_out_ids.__getitem__, contract[1]))
+                output_ids = tuple(map(res_out_ids.__getitem__, contract[1])) # FIXME
                 # now we are ready to push the provider info into pending list
                 new_delayed_workers.append((prov_info, input_regs, output_ids))
             # now we are going to process addition and removal of resources;
@@ -871,7 +896,27 @@ class FlowBuilder:
                 options += map(lambda mode_id: (prov_idx, mode_id), modes)
             return options
         return _lookup_providers
-    def construct(self, targets_list):
+    def construct(self, targets_list, **kwargs):
+        # runtime_input is a list of tuples: (resource_name, resource_type_info)
+        runtime_input = kwargs.get('runtime_input', [])
+        runtime_enable = len(runtime_input) > 0
+        # registering dynamic-input node to announce resources availability;
+        # those resources are actually inaccessible as they are provided when
+        # the resulting chain-function is invoked
+        if runtime_enable:
+            runtime_names, runtime_info = zip(*runtime_input)
+            runtime_prio = kwargs.get('runtime_prio', -1)
+            class _RuntimeInputNode:
+                def __init__(self):
+                    self._contract = ([], runtime_names)
+                def static_contracts(self):
+                    return [self._contract]
+                def get_contract(self, mode_idx):
+                    return self._contract
+                def setup(self, mode_idx, input_types, out_mask):
+                    return None, runtime_info
+            runtime_node = _RuntimeInputNode()
+            self.register(runtime_node, runtime_prio)
         configuration_sets = self._find_build_steps(
             targets_list,
             self._build_contracts_lookup(),
@@ -879,7 +924,7 @@ class FlowBuilder:
         results_list = []
         for config in configuration_sets:
             actions, rooms, targets = self._build_actions(*config, targets_list)
-            chainer_template = _ChainTemplate(rooms, targets)
+            chainer_template = _ChainBlueprint(rooms, targets)
             for prov_inf, in_ids, out_ids in actions:
                 if prov_inf is None:
                     # note that out_ids in this case is actually just an index
@@ -902,12 +947,21 @@ class FlowBuilder:
                         chainer_template = None
                         break
                     chainer_template.update_type_info(zip(out_ids, types))
-                    chainer_template.add_chainer_call(
-                        _ChainStorage.wrap_function,
-                        worker,
-                        in_ids,
-                        out_ids,
-                    )
+                    if worker is None:
+                        # worker could be None, if we are going to place data
+                        # manually, bypassing chain internals; this is the case
+                        # for _RuntimeInputNode
+                        chainer_template.add_runtime_input_proc(
+                            _ChainStorage.wrap_assignment,
+                            out_ids,
+                        )
+                    else:
+                        chainer_template.add_chainer_call(
+                            _ChainStorage.wrap_function,
+                            worker,
+                            in_ids,
+                            out_ids,
+                        )
             if chainer_template is not None:
                 out_type_info = tuple(chainer_template.get_type_info(targets))
                 chainer_template.drop_type_info()
