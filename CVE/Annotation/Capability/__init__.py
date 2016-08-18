@@ -22,7 +22,7 @@ def bounding_box_capability(AnnotationClass):
     if hasattr(AnnotationClass, 'bounding_box_capability'):
         return lambda markup: markup.bounding_box_capability()
     # if we have a bbox markup itself we should not convert anything to bbox
-    bboxes_idx = AnnotationClass.signatures.get('numpy_bounding_boxes', None)
+    bboxes_idx = AnnotationClass.signatures.get('std_bboxes', None)
     if bboxes_idx is not None:
         def bbox_getter(markup):
             obj = markup[bboxes_idx]
@@ -36,7 +36,7 @@ def confidence_capability(AnnotationClass):
 
     This function provides a unified way to obtain confidence value in
     a predefined format.'''
-    confs_idx = AnnotationClass.signatures.get('numpy_confidences', None)
+    confs_idx = AnnotationClass.signatures.get('std_scores', None)
     if confs_idx is not None:
         def conf_getter(markup):
             obj = markup[confs_idx]
@@ -57,7 +57,7 @@ def whitelist_capability(AnnotationClass):
     #       with correct shape: (samples,). We can't know the samples count
     #       from here, thus simulation of always-false responses is not
     #       implemented.
-    whitelst_idx = AnnotationClass.signatures.get('numpy_whitelist', None)
+    whitelst_idx = AnnotationClass.signatures.get('std_whitelist', None)
     if whitelst_idx is not None:
         def whlst_getter(markup):
             obj = markup[whitelst_idx]

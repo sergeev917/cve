@@ -13,7 +13,7 @@ from ...Base import NonApplicableLoader
 
 class ConfidenceSampleAnnotation:
     __slots__ = ('value', 'top')
-    storage_signature = 'numpy_confidences'
+    storage_signature = 'std_scores'
     def __init__(self, prealloc = 0):
         self.value = ndarray(prealloc, dtype = 'float32', order = 'C')
         self.top = 0

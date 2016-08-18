@@ -14,35 +14,6 @@ from multiprocessing import (
     Process,
 )
 
-def _inner_flow_init(gt_sample_cls, ts_sample_cls, vrf_obj):
-    gt_sample = _InjectionNode(
-        'sample:ground-truth',
-        ResourceTypeInfo(gt_sample_cls),
-    )
-    ts_sample = _InjectionNode(
-        'sample:testing',
-        ResourceTypeInfo(ts_sample_cls),
-    )
-    flow = FlowBuilder()
-    flow.register(gt_sample)
-    flow.register(ts_sample)
-    flow.register(vrf_obj)
-    flow_opts = flow.construct(['assessment:gt-vs-test:{}'.format(as_kind)])
-    if len(flow_opts) > 1:
-        raise RuntimeError() # FIXME
-    elif len(flow_opts) == 0:
-        raise RuntimeError() # FIXME
-    use_ticks = self._progress
-    worker_count = self._workers
-    msg = 'walking through datasets with verifier'
-    if use_ticks is True and worker_count is None:
-        def start_log(count):
-            return self._logger.progress(msg, count)
-    else:
-        def start_log(count):
-            return self._logger.subtask(msg)
-    do_assessment, output_type_info = flow_opts[0]
-
 # NOTE: not thread-safe, race conditions on storing new mode id
 class SimpleWalker:
     def __init__(self, **kwargs):

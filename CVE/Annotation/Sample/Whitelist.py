@@ -16,7 +16,7 @@ from ...Base import (
 
 class WhitelistSampleAnnotation:
     __slots__ = ('value', 'top')
-    storage_signature = 'numpy_whitelist'
+    storage_signature = 'std_whitelist'
     def __init__(self, prealloc = 0):
         self.value = ndarray(prealloc, dtype = 'bool', order = 'C')
         self.top = 0

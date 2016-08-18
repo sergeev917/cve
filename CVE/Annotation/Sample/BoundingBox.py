@@ -24,7 +24,7 @@ class BoundingBoxSampleAnnotation:
        bounding box. So note that the data is stored row-wise, a bounding box
        is a column in the matrix.'''
     __slots__ = ('value', 'top')
-    storage_signature = 'numpy_bounding_boxes'
+    storage_signature = 'std_bboxes'
     def __init__(self, prealloc_obj = 0):
         '''Initializes empty annotation, i.e. with no bounding boxes stored.'''
         self.value = ndarray((4, prealloc_obj), dtype = 'int32', order = 'C')
