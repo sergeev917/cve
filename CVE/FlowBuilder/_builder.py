@@ -621,6 +621,10 @@ class _ChainBlueprint:
     def add_chainer_call(self, chainer_member, *args, **kwargs):
         self._gears.append((chainer_member, args, kwargs))
     def add_runtime_input_proc(self, input_proc_gen, *args, **kwargs):
+        # FIXME: we can remember index when we need to call data insertion
+        # FIXME: current action could break reused rooms
+        assert len(self._gears) == 0, \
+               'input node is rearranged, should be first action'
         self._input_proc = (input_proc_gen, args, kwargs)
     def assemble(self):
         chainer = _ChainStorage(self._rooms)

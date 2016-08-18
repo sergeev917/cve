@@ -14,19 +14,6 @@ from multiprocessing import (
     Process,
 )
 
-class _InjectionNode:
-    __slots__ = ('data', '_contract', '_output_type')
-    def __init__(self, resource_name, output_type):
-        self._contract = ((), (resource_name,))
-        self._output_type = output_type
-    def static_contracts(self):
-        return [self._contract]
-    def get_contract(self, mode_id):
-        return self._contract
-    def setup(self, mode_id, input_types, output_mask):
-        # need to capture "self", since self.data is a placeholder
-        return (lambda: self.data, (self._output_type,))
-
 def _inner_flow_init(gt_sample_cls, ts_sample_cls, vrf_obj):
     gt_sample = _InjectionNode(
         'sample:ground-truth',
@@ -112,14 +99,18 @@ class SimpleWalker:
             print('walker: no verifier object found')
             raise RuntimeError() # FIXME
         # use additional flow builder here to connect samples, verifier and
-        # verifier outputs; we will need to setup two sample-injection nodes
-        gt_sample = _InjectionNode('sample:ground-truth', ResourceTypeInfo(gt_sample_cls))
-        ts_sample = _InjectionNode('sample:testing', ResourceTypeInfo(ts_sample_cls))
+        # verifier outputs; to insert sample data we will use runtime-input
+        # support in flow builder
+        runtime_config = [
+            ('sample:ground-truth', ResourceTypeInfo(gt_sample_cls)),
+            ('sample:testing', ResourceTypeInfo(ts_sample_cls)),
+        ]
         flow = FlowBuilder()
-        flow.register(gt_sample)
-        flow.register(ts_sample)
         flow.register(vrf_obj)
-        flow_opts = flow.construct(['assessment:gt-vs-test:{}'.format(as_kind)])
+        flow_opts = flow.construct(
+            ['assessment:gt-vs-test:{}'.format(as_kind)],
+            runtime_input = runtime_config,
+        )
         if len(flow_opts) > 1:
             raise RuntimeError() # FIXME
         elif len(flow_opts) == 0:
@@ -127,6 +118,8 @@ class SimpleWalker:
         use_ticks = self._progress
         worker_count = self._workers
         msg = 'walking through datasets with verifier'
+        if worker_count is not None:
+            msg += ' (using {} processes)'.format(worker_count)
         if use_ticks is True and worker_count is None:
             def start_log(count):
                 return self._logger.progress(msg, count)
@@ -146,32 +139,30 @@ class SimpleWalker:
             assessment_list = []
             if worker_count is None:
                 with start_log(len(gt_dataset)) as tasklog:
-                    do_assessment = do_assessment.assemble()
+                    assess = do_assessment.assemble()
                     tick = tasklog.tick if use_ticks else None
                     for sample_name, gt_ann in gt_dataset:
-                        gt_sample.data = gt_ann
-                        ts_sample.data = ts_dataset[sample_name] # FIXME: add get(None)
                         # since construct()-provided functions return list of values,
                         # we need to extract the first field (and the only field)
-                        assessment_list.append(do_assessment()[0])
+                        # FIXME: also check for sample presence
+                        assessment_list.append(
+                            assess(gt_ann, ts_dataset[sample_name])[0],
+                        )
                         tick and tick()
             else:
                 def process_worker(data_chunk, do_assessment, out):
-                    do_assessment = do_assessment.assemble()
+                    assess = do_assessment.assemble()
                     results_list = []
                     for gt_ann, ts_ann in data_chunk:
-                        # FIXME: how we are going to push data?
-                        results_list.append(do_assessment()[0])
+                        results_list.append(assess(gt_ann, ts_ann)[0])
                     out.put(results_list)
                 # we have multiple workers to load, so we are splitting
                 # dataset names into corresponding number of pieces
                 data = [(e[1], ts_dataset[e[0]]) for e in gt_dataset]
-                print('workers:', worker_count, 'jobs:', len(data))
                 job_size, rem = divmod(len(data), worker_count)
                 ranges = [job_size * e for e in range(worker_count + 1)]
                 ranges = list(zip(ranges[:-1], ranges[1:]))
                 ranges[-1] = (ranges[-1][0], ranges[-1][1] + rem)
-                print('ranges:', ranges)
                 data = [data[e[0]:e[1]] for e in ranges]
                 with start_log(0) as tasklog:
                     processes, assessment_list = [], []
@@ -182,8 +173,8 @@ class SimpleWalker:
                         processes.append(proc)
                         proc.start()
                     for proc in processes:
-                        proc.join()
                         assessment_list += out_queue.get()
-                exit(1)
+                    for proc in processes:
+                        proc.join()
             return assessment_list
         return execute, (ResourceTypeInfo(list, elem_type = output_type_info),)
