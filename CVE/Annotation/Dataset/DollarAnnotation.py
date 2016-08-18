@@ -40,7 +40,7 @@ class DollarAnnotation(IDatasetAnnotation):
             for elem in scandir(path):
                 if not elem.name.startswith('.') and not elem.is_dir():
                     file_count += 1
-            msg = 'reading ground-truth files in "{}"'.format(path)
+            msg = 'reading annotation files in "{}"'.format(path)
             with logger.progress(msg, file_count) as spinner:
                 self.__load__(path, spinner.tick, **kwargs)
     def __load__(self, path, tick = None, **kwargs):

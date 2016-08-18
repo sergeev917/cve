@@ -117,7 +117,10 @@ class CurvePlotter2D:
             return worker_func, (None,)
         # need to make a logger wrapped worker
         def log_wrapped_worker(*args, **kwargs):
-            with self._logger.subtask('producing the curve image'):
+            msg = 'plotting the curve (output is at "{}")'.format(
+                self.config['out_path'],
+            )
+            with self._logger.subtask(msg):
                 return worker_func(*args, **kwargs)
         return log_wrapped_worker, (None,)
 

@@ -34,7 +34,7 @@ class SimpleDetectionsList(IDatasetAnnotation):
             raise UnrecognizedAnnotationFormat('A regular file is expected')
         # if the progress bar is requested we need to count lines in the markup
         if progress:
-            msg = 'reading ground-truth files in "{}"'.format(path)
+            msg = 'reading annotation file at "{}"'.format(path)
             with logger.progress(msg, count_lines(path)) as spinner:
                 self.__load__(path, spinner.tick, **kwargs)
         else:

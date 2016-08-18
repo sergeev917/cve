@@ -228,6 +228,9 @@ class DetectionPerformanceCurve:
             return worker, output_types
         # wrap into logger here
         def log_wrapped_worker(*args, **kwargs):
-            with self._logger.subtask('analysing data to produce a performance curve'):
+            msg = 'analysing assessments to produce a curve {}({})'.format(
+                *[cls.entity for cls in self._axis_cls],
+            )
+            with self._logger.subtask(msg):
                 return worker(*args, **kwargs)
         return log_wrapped_worker, output_types

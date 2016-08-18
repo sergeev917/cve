@@ -88,9 +88,9 @@ class SimpleWalker:
             raise RuntimeError() # FIXME
         use_ticks = self._progress
         worker_count = self._workers
-        msg = 'walking through datasets with verifier'
+        msg = 'walking through datasets using the assessor'
         if worker_count is not None:
-            msg += ' (using {} processes)'.format(worker_count)
+            msg += ' ({} processes in play)'.format(worker_count)
         if use_ticks is True and worker_count is None:
             def start_log(count):
                 return self._logger.progress(msg, count)
