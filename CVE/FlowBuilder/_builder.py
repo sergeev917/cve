@@ -809,15 +809,15 @@ class FlowBuilder:
                 contract = self._nodeobjs[prov_id].get_contract(mode_id)
                 # matching require-part of the contract with dependencies ids
                 deps_ids = _extract_resources(_lookup_deps(curr_prov_id))
-                input_ids = map(deps_ids.__getitem__, contract[0]) # FIXME
+                input_ids = [deps_ids[i] for i in contract[0]]
                 # these are ids of the objects we need on our input; now we
                 # need to map them into registry indices
-                input_regs = tuple(map(reg_alloc_ids.__getitem__, input_ids)) # FIXME
+                input_regs = [reg_alloc_ids[i] for i in input_ids]
                 # output registers are unknown at this point, since they will
                 # be allocated only on the next step (since output resources
                 # ids are dependent on the provider id)
                 res_out_ids = _extract_resources(_lookup_users(curr_prov_id))
-                output_ids = tuple(map(res_out_ids.__getitem__, contract[1])) # FIXME
+                output_ids = [res_out_ids[i] for i in contract[1]]
                 # now we are ready to push the provider info into pending list
                 new_delayed_workers.append((prov_info, input_regs, output_ids))
             # now we are going to process addition and removal of resources;
@@ -843,7 +843,7 @@ class FlowBuilder:
             # we have new resources allocated, so we can proceed with processing
             # of delayed providers (they were waiting for output ids allocation)
             for prov_info, input_regs, output_ids in delayed_workers:
-                output_regs = tuple(map(reg_alloc_ids.__getitem__, output_ids))
+                output_regs = [reg_alloc_ids[i] for i in output_ids]
                 action_list.append((prov_info, input_regs, output_regs))
             # after providers are processed we don't need "none" placeholders
             # in registry allocation mapping (these resources by definition have
@@ -868,7 +868,7 @@ class FlowBuilder:
             # NOTE: here we are not going to handle a situation where there are
             # present multiple ids/indices which correspond to a single resource
             resource_index_mapping[resources[curr_id]] = alloc_idx
-        indices = tuple(map(resource_index_mapping.__getitem__, targets_list))
+        indices = [resource_index_mapping[i] for i in targets_list]
         return (action_list, reg.max_allocated_rooms(), indices)
     def _build_contracts_lookup(self):
         # construct resource providers index for static contracts
